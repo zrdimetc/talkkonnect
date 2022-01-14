@@ -186,6 +186,8 @@ func (s *Stream) OnAudioStream(e *gumble.AudioStreamEvent) {
 
 			if Config.Global.Software.Settings.CancellableStream && NowStreaming {
 				pstream.Stop()
+				IsPlayStream = !IsPlayStream
+				NowStreaming = IsPlayStream
 			}
 
 			Talking <- talkingStruct{true, e.User.Name}
