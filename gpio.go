@@ -17,6 +17,8 @@
  * Suvir Kumar <suvir@talkkonnect.com>
  * Portions created by the Initial Developer are Copyright (C) Suvir Kumar. All Rights Reserved.
  *
+ * Rotary Encoder Alogrithm Inpired By https://www.brainy-bits.com/post/best-code-to-use-with-a-ky-040-rotary-encoder-let-s-find-out
+ *
  * Contributor(s):
  *
  * Suvir Kumar <suvir@talkkonnect.com>
@@ -31,6 +33,7 @@ package talkkonnect
 
 import (
 	"log"
+	"strconv"
 	"time"
 
 	"github.com/stianeikeland/go-rpio"
@@ -82,6 +85,11 @@ var (
 	RotaryAPin uint
 	RotaryBPin uint
 
+	RotaryButtonUsed  bool
+	RotaryButton      gpio.Pin
+	RotaryButtonPin   uint
+	RotaryButtonState uint
+
 	VolUpButtonUsed  bool
 	VolUpButton      gpio.Pin
 	VolUpButtonPin   uint
@@ -111,6 +119,11 @@ var (
 	NextServerButton      gpio.Pin
 	NextServerButtonPin   uint
 	NextServerButtonState uint
+
+	RepeaterToneButtonUsed  bool
+	RepeaterToneButton      gpio.Pin
+	RepeaterToneButtonPin   uint
+	RepeaterToneButtonState uint
 )
 
 var D [8]*mcp23017.Device
@@ -225,6 +238,13 @@ func (b *Talkkonnect) initGPIO() {
 				RotaryUsed = true
 				RotaryBPin = io.PinNo
 			}
+			if io.Name == "rotarybutton" && io.PinNo > 0 {
+				log.Printf("debug: GPIO Setup Input Device %v Name %v PinNo %v", io.Device, io.Name, io.PinNo)
+				RotaryButtonPullUp := rpio.Pin(io.PinNo)
+				RotaryButtonPullUp.PullUp()
+				RotaryButtonUsed = true
+				RotaryButtonPin = io.PinNo
+			}
 			if io.Name == "volup" && io.PinNo > 0 {
 				log.Printf("debug: GPIO Setup Input Device %v Name %v PinNo %v", io.Device, io.Name, io.PinNo)
 				VolUpPinPullUp := rpio.Pin(io.PinNo)
@@ -267,10 +287,17 @@ func (b *Talkkonnect) initGPIO() {
 				NextServerButtonUsed = true
 				NextServerButtonPin = io.PinNo
 			}
+			if io.Name == "repeatertone" && io.PinNo > 0 {
+				log.Printf("debug: GPIO Setup Input Device %v Name %v PinNo %v", io.Device, io.Name, io.PinNo)
+				RepeaterToneButtonPinPullUp := rpio.Pin(io.PinNo)
+				RepeaterToneButtonPinPullUp.PullUp()
+				RepeaterToneButtonUsed = true
+				RepeaterToneButtonPin = io.PinNo
+			}
 		}
 	}
 
-	if TxButtonUsed || TxToggleUsed || UpButtonUsed || DownButtonUsed || PanicUsed || StreamToggleUsed || CommentUsed || RotaryUsed || VolUpButtonUsed || VolDownButtonUsed || TrackingUsed || MQTT0ButtonUsed || MQTT1ButtonUsed || NextServerButtonUsed {
+	if TxButtonUsed || TxToggleUsed || UpButtonUsed || DownButtonUsed || PanicUsed || StreamToggleUsed || CommentUsed || RotaryUsed || RotaryButtonUsed || VolUpButtonUsed || VolDownButtonUsed || TrackingUsed || MQTT0ButtonUsed || MQTT1ButtonUsed || NextServerButtonUsed || RepeaterToneButtonUsed {
 		rpio.Close()
 	}
 
@@ -302,7 +329,20 @@ func (b *Talkkonnect) initGPIO() {
 								} else {
 									time.Sleep(150 * time.Millisecond)
 								}
-								b.TransmitStart()
+								txlockout := &TXLockOut
+								if Config.Global.Software.Settings.TXLockOut && *txlockout {
+									log.Println("warn: TX Lockout Stopping Transmission")
+									eventSound := findEventSound("txlockout")
+									if eventSound.Enabled {
+										if v, err := strconv.Atoi(eventSound.Volume); err == nil {
+											localMediaPlayer(eventSound.FileName, v, eventSound.Blocking, 0, 1)
+											log.Printf("debug: Playing txlockout Sound")
+										}
+									}
+								} else {
+									b.TransmitStart()
+								}
+
 							}
 						}
 					}
@@ -505,24 +545,87 @@ func (b *Talkkonnect) initGPIO() {
 		RotaryA = gpio.NewInput(RotaryAPin)
 		RotaryB = gpio.NewInput(RotaryBPin)
 		go func() {
-			var LastStateA uint = 0
+			var currentStateA uint
+			var currentStateB uint
+			var lastStateA uint
+			var lastStateB uint
 			for {
 				if IsConnected {
-					time.Sleep(5 * time.Millisecond)
-					currentStateA, err0 := RotaryA.Read()
-					if currentStateA != LastStateA && err0 == nil {
-						currentStateB, err1 := RotaryB.Read()
-						if currentStateB != currentStateA && err1 == nil {
-							playIOMedia("iorotarycw")
-							log.Println("debug: Rotating Clockwise")
-							b.cmdChannelUp()
-						} else {
-							log.Println("debug: Rotating CounterClockwise")
-							playIOMedia("iorotaryccw")
-							b.cmdChannelDown()
+					currentStateA, _ = RotaryA.Read()
+					currentStateB, _ = RotaryB.Read()
+					time.Sleep(2 * time.Millisecond)
+					lastStateA, _ = RotaryA.Read()
+					lastStateB, _ = RotaryB.Read()
+
+					if lastStateA == 0 && lastStateB == 1 {
+						if currentStateA == 1 && currentStateB == 0 {
+							b.rotaryAction("ccw")
+							continue
+						}
+						if currentStateA == 1 && currentStateB == 1 {
+							b.rotaryAction("cw")
+							continue
 						}
 					}
-					LastStateA = currentStateA
+
+					if lastStateA == 1 && lastStateB == 0 {
+						if currentStateA == 0 && currentStateB == 1 {
+							b.rotaryAction("ccw")
+							continue
+						}
+						if currentStateA == 0 && currentStateB == 0 {
+							b.rotaryAction("cw")
+							continue
+						}
+					}
+
+					if lastStateA == 1 && lastStateB == 1 {
+						if currentStateA == 0 && currentStateB == 1 {
+							b.rotaryAction("ccw")
+							continue
+						}
+						if currentStateA == 0 && currentStateB == 0 {
+							b.rotaryAction("cw")
+							continue
+						}
+					}
+
+					if lastStateA == 0 && lastStateB == 0 {
+						if currentStateA == 1 && currentStateB == 0 {
+							b.rotaryAction("ccw")
+							continue
+						}
+						if currentStateA == 1 && currentStateB == 1 {
+							b.rotaryAction("cw")
+							continue
+						}
+					}
+				} else {
+					time.Sleep(1 * time.Second)
+				}
+			}
+		}()
+	}
+
+	if RotaryButtonUsed {
+		RotaryButton = gpio.NewInput(RotaryButtonPin)
+		go func() {
+			for {
+				if IsConnected {
+					currentState, err := RotaryButton.Read()
+					time.Sleep(150 * time.Millisecond)
+
+					if currentState != RotaryButtonState && err == nil {
+						RotaryButtonState = currentState
+
+						if RotaryButtonState == 1 {
+							log.Println("debug: Rotary Button is released")
+						} else {
+							log.Println("debug: Rotary Button is pressed")
+							playIOMedia("iorotarybutton")
+							b.nextEnabledRotaryEncoderFunction()
+						}
+					}
 				} else {
 					time.Sleep(1 * time.Second)
 				}
@@ -591,11 +694,11 @@ func (b *Talkkonnect) initGPIO() {
 						TrackingButtonState = currentState
 						if TrackingButtonState == 1 {
 							playIOMedia("iotrackingon")
-							log.Println("debug: Tracking Button State 1 setting comment to on  ")
+							log.Println("debug: Tracking Button State 1 setting GPS Tracking on  ")
 							// place holder to start tracking timer
 						} else {
 							playIOMedia("iotrackingoff")
-							log.Println("debug: Tracking Button State 1 setting comment to off ")
+							log.Println("debug: Tracking Button State 1 setting GPS Tracking off ")
 							// place holder to start tracking timer
 							time.Sleep(150 * time.Millisecond)
 						}
@@ -621,7 +724,10 @@ func (b *Talkkonnect) initGPIO() {
 						} else {
 							log.Println("debug: MQTT0 Button is pressed")
 							playIOMedia("iomqtt0")
-							//mqtt button0 send command placeholder
+							MQTTButtonCommand := findMQTTButton("0")
+							if MQTTButtonCommand.Enabled {
+								MQTTPublish(MQTTButtonCommand.Payload)
+							}
 							time.Sleep(150 * time.Millisecond)
 						}
 					}
@@ -646,7 +752,10 @@ func (b *Talkkonnect) initGPIO() {
 						} else {
 							log.Println("debug: MQTT1 Button is pressed")
 							playIOMedia("iomqtt1")
-							//mqtt button1 send command placeholder
+							MQTTButtonCommand := findMQTTButton("1")
+							if MQTTButtonCommand.Enabled {
+								MQTTPublish(MQTTButtonCommand.Payload)
+							}
 							time.Sleep(150 * time.Millisecond)
 						}
 					}
@@ -671,7 +780,33 @@ func (b *Talkkonnect) initGPIO() {
 						} else {
 							log.Println("debug: NextServer Button is pressed")
 							playIOMedia("iocnextserver")
-							b.ChannelUp()
+							b.cmdConnNextServer()
+							time.Sleep(150 * time.Millisecond)
+						}
+					}
+				} else {
+					time.Sleep(1 * time.Second)
+				}
+			}
+		}()
+	}
+
+	if RepeaterToneButtonUsed {
+		RepeaterToneButton = gpio.NewInput(RepeaterToneButtonPin)
+		go func() {
+			for {
+				if IsConnected {
+					currentState, err := RepeaterToneButton.Read()
+					time.Sleep(150 * time.Millisecond)
+					if currentState != RepeaterToneButtonState && err == nil {
+						RepeaterToneButtonState = currentState
+
+						if RepeaterToneButtonState == 1 {
+							log.Println("debug: Repeater Tone Button is released")
+						} else {
+							log.Println("debug: Repeater Tone Button is pressed")
+							playIOMedia("iorepeatertone")
+							b.cmdPlayRepeaterTone()
 							time.Sleep(150 * time.Millisecond)
 						}
 					}
@@ -694,13 +829,26 @@ func GPIOOutPin(name string, command string) {
 			if command == "on" {
 				switch io.Type {
 				case "gpio":
-					log.Printf("debug: Turning On %v at pin %v Output GPIO\n", io.Name, io.PinNo)
-					gpio.NewOutput(io.PinNo, true)
+					if !io.Inverted {
+						log.Printf("debug: Turning On %v at pin %v Output GPIO (Non-Inverting)\n", io.Name, io.PinNo)
+						gpio.NewOutput(io.PinNo, true)
+					} else {
+						log.Printf("debug: Turning On %v at pin %v Output GPIO (Inverting)\n", io.Name, io.PinNo)
+						gpio.NewOutput(io.PinNo, false)
+					}
 				case "mcp23017":
-					log.Printf("debug: Turning On %v at pin %v Output mcp23017\n", io.Name, io.PinNo)
-					err := D[io.ID].DigitalWrite(uint8(io.PinNo), mcp23017.LOW)
-					if err != nil {
-						log.Printf("error: Error Turning On %v at pin %v Output mcp23017 with error %v\n", io.Name, io.PinNo, err)
+					if !io.Inverted {
+						log.Printf("debug: Turning On %v at pin %v Output mcp23017 (Inverted)\n", io.Name, io.PinNo)
+						err := D[io.ID].DigitalWrite(uint8(io.PinNo), mcp23017.HIGH)
+						if err != nil {
+							log.Printf("error: Error Turning On %v at pin %v Output mcp23017 with error %v\n", io.Name, io.PinNo, err)
+						}
+					} else {
+						log.Printf("debug: Turning On %v at pin %v Output mcp23017 (Non-Inverted)\n", io.Name, io.PinNo)
+						err := D[io.ID].DigitalWrite(uint8(io.PinNo), mcp23017.LOW)
+						if err != nil {
+							log.Printf("error: Error Turning On %v at pin %v Output mcp23017 with error %v\n", io.Name, io.PinNo, err)
+						}
 					}
 				default:
 					log.Println("error: GPIO Types Currently Supported are gpio or mcp23017 only!")
@@ -711,13 +859,26 @@ func GPIOOutPin(name string, command string) {
 			if command == "off" {
 				switch io.Type {
 				case "gpio":
-					log.Printf("debug: Turning Off %v at pin %v Output GPIO\n", io.Name, io.PinNo)
-					gpio.NewOutput(io.PinNo, false)
+					if !io.Inverted {
+						log.Printf("debug: Turning Off %v at pin %v Output GPIO (Non-Inverting)\n", io.Name, io.PinNo)
+						gpio.NewOutput(io.PinNo, false)
+					} else {
+						log.Printf("debug: Turning Off %v at pin %v Output GPIO (Inverting)\n", io.Name, io.PinNo)
+						gpio.NewOutput(io.PinNo, true)
+					}
 				case "mcp23017":
-					log.Printf("debug: Turning Off %v at pin %v Output mcp23017\n", io.Name, io.PinNo)
-					err := D[io.ID].DigitalWrite(uint8(io.PinNo), mcp23017.HIGH)
-					if err != nil {
-						log.Printf("error: Error Turning Off %v at pin %v Output mcp23017 with error %v\n", io.Name, io.PinNo, err)
+					if !io.Inverted {
+						log.Printf("debug: Turning Off %v at pin %v Output mcp23017 (Inverted)\n", io.Name, io.PinNo)
+						err := D[io.ID].DigitalWrite(uint8(io.PinNo), mcp23017.LOW)
+						if err != nil {
+							log.Printf("error: Error Turning On %v at pin %v Output mcp23017 with error %v\n", io.Name, io.PinNo, err)
+						}
+					} else {
+						log.Printf("debug: Turning Off %v at pin %v Output mcp23017 (Non-Inverted)\n", io.Name, io.PinNo)
+						err := D[io.ID].DigitalWrite(uint8(io.PinNo), mcp23017.HIGH)
+						if err != nil {
+							log.Printf("error: Error Turning On %v at pin %v Output mcp23017 with error %v\n", io.Name, io.PinNo, err)
+						}
 					}
 				default:
 					log.Println("error: GPIO Types Currently Supported are gpio or mcp23017 only!")
@@ -771,29 +932,55 @@ func GPIOOutAll(name string, command string) {
 			switch io.Type {
 			case "gpio":
 				if command == "on" {
-					log.Printf("debug: Turning On %v Output GPIO\n", io.Name)
-					gpio.NewOutput(io.PinNo, true)
+					if io.Inverted {
+						log.Printf("debug: Turning On %v Output GPIO (Inverted)\n", io.Name)
+						gpio.NewOutput(io.PinNo, false)
+					} else {
+						log.Printf("debug: Turning On %v Output GPIO (Not-Inverted)\n", io.Name)
+						gpio.NewOutput(io.PinNo, true)
+					}
 				}
 				if command == "off" {
-					log.Printf("debug: Turning Off %v Output GPIO\n", io.Name)
-					gpio.NewOutput(io.PinNo, false)
+					if io.Inverted {
+						log.Printf("debug: Turning Off %v Output GPIO (Inverted)\n", io.Name)
+						gpio.NewOutput(io.PinNo, true)
+					} else {
+						log.Printf("debug: Turning Off %v Output GPIO (Not-Inverted)\n", io.Name)
+						gpio.NewOutput(io.PinNo, false)
+					}
 				}
 			case "mcp23017":
 				if command == "on" {
-					log.Printf("debug: Turning On %v Output mcp23017\n", io.Name)
 					if D[io.ID] != nil {
-						err := D[io.ID].DigitalWrite(uint8(io.PinNo), mcp23017.LOW)
-						if err != nil {
-							log.Printf("error: Error Turning On %v at pin %v Output mcp23017\n", io.Name, io.PinNo)
+						if io.Inverted {
+							log.Printf("debug: Turning On %v Output mcp23017 (Inverted)\n", io.Name)
+							err := D[io.ID].DigitalWrite(uint8(io.PinNo), mcp23017.HIGH)
+							if err != nil {
+								log.Printf("error: Error Turning On %v at pin %v Output mcp23017 (Inverted)\n", io.Name, io.PinNo)
+							}
+						} else {
+							log.Printf("debug: Turning On %v Output mcp23017 (Not Inverted)\n", io.Name)
+							err := D[io.ID].DigitalWrite(uint8(io.PinNo), mcp23017.LOW)
+							if err != nil {
+								log.Printf("error: Error Turning On %v at pin %v Output mcp23017 (Inverted)\n", io.Name, io.PinNo)
+							}
 						}
 					}
 				}
 				if command == "off" {
-					log.Printf("debug: Turning Off %v Output mcp23017\n", io.Name)
 					if D[io.ID] != nil {
-						err := D[io.ID].DigitalWrite(uint8(io.PinNo), mcp23017.HIGH)
-						if err != nil {
-							log.Printf("error: Error Turning Off %v at pin %v Output mcp23017\n", io.Name, io.PinNo)
+						if io.Inverted {
+							log.Printf("debug: Turning Off %v Output mcp23017 (Inverted)\n", io.Name)
+							err := D[io.ID].DigitalWrite(uint8(io.PinNo), mcp23017.LOW)
+							if err != nil {
+								log.Printf("error: Error Turning Off %v at pin %v Output mcp23017 (Inverted)\n", io.Name, io.PinNo)
+							}
+						} else {
+							log.Printf("debug: Turning Off %v Output mcp23017 (Not Inverted)\n", io.Name)
+							err := D[io.ID].DigitalWrite(uint8(io.PinNo), mcp23017.HIGH)
+							if err != nil {
+								log.Printf("error: Error Turning Off %v at pin %v Output mcp23017 (Inverted)\n", io.Name, io.PinNo)
+							}
 						}
 					}
 				}
@@ -869,4 +1056,116 @@ func Max7219(max7219Cascaded int, spiBus int, spiDevice int, brightness byte, to
 		mtx.Device.SevenSegmentDisplay(toDisplay)
 		defer mtx.Close()
 	}
+}
+
+func (b *Talkkonnect) rotaryAction(direction string) {
+	if Config.Global.Hardware.IO.RotaryEncoder.Enabled {
+		if direction == "cw" {
+			log.Println("debug: Rotating Clockwise")
+			switch RotaryFunction.Function {
+			case "mumblechannel":
+				if b.findEnabledRotaryEncoderFunction("mumblechannel") {
+					b.ChannelUp()
+				}
+			case "localvolume":
+				if b.findEnabledRotaryEncoderFunction("localvolume") {
+					b.cmdVolumeUp()
+				}
+			case "radiochannel":
+				if b.findEnabledRotaryEncoderFunction("radiochannel") {
+					go radioChannelIncrement("up")
+				}
+			case "voicetarget":
+				if b.findEnabledRotaryEncoderFunction("voicetarget") {
+					b.VTMove("up")
+				}
+			default:
+				log.Println("error: No Rotary Function Enabled in Config")
+				return
+			}
+			playIOMedia("iorotarycw")
+		}
+		if direction == "ccw" {
+			log.Println("debug: Rotating CounterClockwise")
+			switch RotaryFunction.Function {
+			case "mumblechannel":
+				if b.findEnabledRotaryEncoderFunction("mumblechannel") {
+					b.ChannelDown()
+				}
+			case "localvolume":
+				if b.findEnabledRotaryEncoderFunction("localvolume") {
+					b.cmdVolumeDown()
+				}
+			case "radiochannel":
+				if b.findEnabledRotaryEncoderFunction("radiochannel") {
+					go radioChannelIncrement("down")
+				}
+			case "voicetarget":
+				if b.findEnabledRotaryEncoderFunction("voicetarget") {
+					b.VTMove("down")
+				}
+			default:
+				log.Println("error: No Rotary Function Enabled in Config")
+				return
+			}
+			playIOMedia("iorotaryccw")
+		}
+	}
+}
+
+func createEnabledRotaryEncoderFunctions() {
+	for item, control := range Config.Global.Hardware.IO.RotaryEncoder.Control {
+		if control.Enabled {
+			RotaryFunctions = append(RotaryFunctions, rotaryFunctionsStruct{item, control.Function})
+		}
+	}
+}
+
+func (b *Talkkonnect) nextEnabledRotaryEncoderFunction() {
+	if len(RotaryFunctions) > RotaryFunction.Item+1 {
+		RotaryFunction.Item++
+		RotaryFunction.Function = RotaryFunctions[RotaryFunction.Item].Function
+		log.Printf("info: Current Rotary Item %v Function %v\n", RotaryFunction.Item, RotaryFunction.Function)
+		if RotaryFunction.Function == "mumblechannel" {
+			b.sevenSegment("mumblechannel", strconv.Itoa(int(b.Client.Self.Channel.ID)))
+		}
+		if RotaryFunction.Function == "localvolume" {
+			b.cmdCurrentVolume()
+		}
+		if RotaryFunction.Function == "radiochannel" {
+			b.sevenSegment("radiochannel", "")
+		}
+		if RotaryFunction.Function == "voicetarget" {
+			b.sevenSegment("voicetarget", "")
+		}
+		return
+	}
+
+	if len(RotaryFunctions) == RotaryFunction.Item+1 {
+		RotaryFunction.Item = 0
+		RotaryFunction.Function = RotaryFunctions[0].Function
+		log.Printf("info: Current Rotary Item %v Function %v\n", RotaryFunction.Item, RotaryFunction.Function)
+		if RotaryFunction.Function == "mumblechannel" {
+			b.sevenSegment("mumblechannel", strconv.Itoa(int(b.Client.Self.Channel.ID)))
+		}
+		if RotaryFunction.Function == "localvolume" {
+			b.cmdCurrentVolume()
+		}
+		if RotaryFunction.Function == "radiochannel" {
+			b.sevenSegment("radiochannel", "")
+		}
+		if RotaryFunction.Function == "voicetarget" {
+			b.sevenSegment("voicetarget", "")
+		}
+		return
+	}
+}
+
+func (b *Talkkonnect) findEnabledRotaryEncoderFunction(findFunction string) bool {
+	for _, functionName := range Config.Global.Hardware.IO.RotaryEncoder.Control {
+		if findFunction == functionName.Function {
+			return functionName.Enabled
+		}
+	}
+	return false
 }

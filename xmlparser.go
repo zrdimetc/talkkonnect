@@ -42,10 +42,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/comail/colog"
+	"github.com/talkkonnect/colog"
 	goled "github.com/talkkonnect/go-oled-i2c"
 	"github.com/talkkonnect/gumble/gumble"
 	"github.com/talkkonnect/gumble/gumbleffmpeg"
+	"github.com/talkkonnect/sa818"
 	"golang.org/x/sys/unix"
 )
 
@@ -69,8 +70,9 @@ type ConfigStruct struct {
 			} `xml:"tokens"`
 			Voicetargets struct {
 				ID []struct {
-					Value uint32 `xml:"value,attr"`
-					Users struct {
+					Value     uint32 `xml:"value,attr"`
+					IsCurrent bool   `xml:"iscurrent"`
+					Users     struct {
 						User []string `xml:"user"`
 					} `xml:"users"`
 					Channels struct {
@@ -107,6 +109,7 @@ type ConfigStruct struct {
 				SimplexWithMute         bool          `xml:"simplexwithmute"`
 				TxCounter               bool          `xml:"txcounter"`
 				NextServerIndex         int           `xml:"nextserverindex"`
+				TXLockOut               bool          `xml:"txlockout"`
 			} `xml:"settings"`
 			AutoProvisioning struct {
 				Enabled      bool   `xml:"enabled,attr"`
@@ -186,19 +189,28 @@ type ConfigStruct struct {
 					Enabled  bool `xml:"enabled,attr"`
 					Settings struct {
 						MQTTEnabled             bool   `xml:"enabled,attr"`
-						MQTTTopic               string `xml:"mqtttopic"`
+						MQTTSubTopic            string `xml:"mqttsubtopic"`
+						MQTTPubTopic            string `xml:"mqttpubtopic"`
 						MQTTBroker              string `xml:"mqttbroker"`
 						MQTTPassword            string `xml:"mqttpassword"`
 						MQTTUser                string `xml:"mqttuser"`
 						MQTTId                  string `xml:"mqttid"`
 						MQTTCleansess           bool   `xml:"cleansess"`
-						MQTTQos                 int    `xml:"qos"`
+						MQTTQos                 byte   `xml:"qos"`
 						MQTTNum                 int    `xml:"num"`
 						MQTTPayload             string `xml:"payload"`
 						MQTTAction              string `xml:"action"`
 						MQTTStore               string `xml:"store"`
+						MQTTRetained            bool   `xml:"retained"`
 						MQTTAttentionBlinkTimes int    `xml:"attentionblinktimes"`
 						MQTTAttentionBlinkmsecs int    `xml:"attentionblinkmsecs"`
+						Pubpayload              struct {
+							Mqtt []struct {
+								Item    string `xml:"item,attr"`
+								Payload string `xml:"payload,attr"`
+								Enabled bool   `xml:"enabled,attr"`
+							} `xml:"mqtt"`
+						} `xml:"pubpayload"`
 					} `xml:"settings"`
 					Commands struct {
 						Command []struct {
@@ -226,6 +238,7 @@ type ConfigStruct struct {
 				PrintGPIOExpander     bool `xml:"printgpioexpander"`
 				PrintMax7219          bool `xml:"printmax7219"`
 				PrintPins             bool `xml:"printpins"`
+				PrintRotary           bool `xml:"printrotary"`
 				PrintPulse            bool `xml:"printpulse"`
 				PrintVolumeButtonStep bool `xml:"printvolumebuttonstep"`
 				PrintHeartBeat        bool `xml:"printheartbeat"`
@@ -238,6 +251,7 @@ type ConfigStruct struct {
 				PrintUSBKeyboard      bool `xml:"printusbkeyboard"`
 				PrintAudioRecord      bool `xml:"printaudiorecord"`
 				PrintKeyboardMap      bool `xml:"printkeyboardmap"`
+				PrintRadioModule      bool `xml:"printradiomodule"`
 				PrintMultimedia       bool `xml:"printmultimedia"`
 			} `xml:"printvariables"`
 			TTSMessages struct {
@@ -302,9 +316,17 @@ type ConfigStruct struct {
 						PinNo     uint   `xml:"pinno,attr"`
 						Type      string `xml:"type,attr"`
 						ID        int    `xml:"chipid,attr"`
+						Inverted  bool   `xml:"inverted,attr"`
 						Enabled   bool   `xml:"enabled,attr"`
 					} `xml:"pin"`
 				} `xml:"pins"`
+				RotaryEncoder struct {
+					Enabled bool `xml:"enabled,attr"`
+					Control []struct {
+						Function string `xml:"function,attr"`
+						Enabled  bool   `xml:"enabled,attr"`
+					} `xml:"control"`
+				} `xml:"rotaryencoder"`
 				Pulse struct {
 					Leading  time.Duration `xml:"leadingmsecs,attr"`
 					Pulse    time.Duration `xml:"pulsemsecs,attr"`
@@ -371,12 +393,16 @@ type ConfigStruct struct {
 				MinRead             uint   `xml:"minread"`
 				Rx                  bool   `xml:"rx"`
 				GpsInfoVerbose      bool   `xml:"gpsinfoverbose"`
+				GpsDiagSounds       bool   `xml:"gpsdiagsounds"`
+				GpsDisplayShow      bool   `xml:"gpsdisplayshow"`
 			} `xml:"gps"`
 			Traccar struct {
 				Enabled             bool   `xml:"enabled,attr"`
 				Track               bool   `xml:"track"`
 				ClientId            string `xml:"clientid"`
 				DeviceScreenEnabled bool   `xml:"devicescreenenabled"`
+				TraccarDiagSounds   bool   `xml:"traccardiagsounds"`
+				TraccarDisplayShow  bool   `xml:"traccardispayshow"`
 				Protocol            struct {
 					Name   string `xml:"name,attr"`
 					Osmand struct {
@@ -447,6 +473,41 @@ type ConfigStruct struct {
 					} `xml:"usbkeyboard"`
 				} `xml:"command"`
 			} `xml:"keyboard"`
+			Radio struct {
+				XMLName          xml.Name `xml:"radio"`
+				Enabled          bool     `xml:"enabled,attr"`
+				ConnectChannelID string   `xml:"connectchannelid"`
+				Sa818            struct {
+					Enabled   bool `xml:"enabled,attr"`
+					PDEnabled bool `xml:"enabled"`
+					Serial    struct {
+						Enabled  bool   `xml:"enabled,attr"`
+						Port     string `xml:"port"`
+						Baud     uint   `xml:"baud"`
+						Stopbits uint   `xml:"stopbits"`
+						Databits uint   `xml:"databits"`
+					} `xml:"serial"`
+					Channels struct {
+						Channel []struct {
+							ID         string  `xml:"id,attr"`
+							Name       string  `xml:"name,attr"`
+							Enabled    bool    `xml:"enabled,attr"`
+							ItemInList int     `xml:""`
+							Bandwidth  int     `xml:"bandwidth"`
+							Rxfreq     float32 `xml:"rxfreq"`
+							Txfreq     float32 `xml:"txfreq"`
+							Squelch    int     `xml:"squelch"`
+							Ctcsstone  int     `xml:"ctcsstone"`
+							Dcstone    int     `xml:"dcstone"`
+							Predeemph  int     `xml:"predeemph"`
+							Highpass   int     `xml:"highpass"`
+							Lowpass    int     `xml:"lowpass"`
+							Volume     int     `xml:"volume"`
+							TXPower    string  `xml:"txpower"`
+						} `xml:"channel"`
+					} `xml:"channels"`
+				} `xml:"sa818"`
+			}
 		} `xml:"hardware"`
 		Multimedia struct {
 			ID []struct {
@@ -472,8 +533,8 @@ type ConfigStruct struct {
 						Value   time.Duration `xml:"value,attr"`
 						Enabled bool          `xml:"enabled,attr"`
 					} `xml:"postdelay"`
-					Playintostream bool   `xml:"playintostream"`
-					Voicetarget    string `xml:"voicetarget"`
+					Playintostream bool `xml:"playintostream"`
+					Voicetarget    bool `xml:"voicetarget"`
 				} `xml:"params"`
 				Media struct {
 					Source []struct {
@@ -494,8 +555,9 @@ type ConfigStruct struct {
 
 type VTStruct struct {
 	ID []struct {
-		Value uint32
-		Users struct {
+		Value     uint32
+		IsCurrent bool
+		Users     struct {
 			User []string
 		}
 		Channels struct {
@@ -542,9 +604,38 @@ type talkingStruct struct {
 	WhoTalking string
 }
 
+type mqttPubButtonStruct struct {
+	Item    string
+	Payload string
+	Enabled bool
+}
+
+type radioChannelsStruct struct {
+	ID         string
+	Name       string
+	ItemInList int
+	Bandwidth  int
+	Rxfreq     float32
+	Txfreq     float32
+	Squelch    int
+	Ctcsstone  int
+	Dcstone    int
+	Predeemph  int
+	Highpass   int
+	Lowpass    int
+	Volume     int
+}
+
+type rotaryFunctionsStruct struct {
+	Item     int
+	Function string
+}
+
 // Generic Global Config Variables
 var Config ConfigStruct
 var ConfigXMLFile string
+var radioChannels []radioChannelsStruct
+var RotaryFunctions []rotaryFunctionsStruct
 
 // Generic Global State Variables
 var (
@@ -558,6 +649,7 @@ var (
 	InStreamSource          bool
 	LCDIsDark               bool
 	GPSDataChannelReceivers int
+	TXLockOut               bool
 )
 
 // Generic Global Counter Variables
@@ -566,7 +658,8 @@ var (
 	ConnectAttempts int
 	AccountIndex    int
 	GenericCounter  int
-	ChannelIndex    int
+	CurrentIndex    int
+	ChannelAction   string
 )
 
 // Generic Global Timer Variables
@@ -588,20 +681,20 @@ var (
 
 //Mumble Account Settings Global Variables
 var (
-	Default             []bool
-	Name                []string
-	Server              []string
-	Username            []string
-	Password            []string
-	Insecure            []bool
-	Register            []bool
-	Certificate         []string
-	Channel             []string
-	Ident               []string
-	Tokens              []gumble.AccessTokens
-	VT                  []VTStruct
-	Accounts            int
-	MaxTokensInAccounts int
+	Default      []bool
+	Name         []string
+	Server       []string
+	Username     []string
+	Password     []string
+	Insecure     []bool
+	Register     []bool
+	Certificate  []string
+	Channel      []string
+	Ident        []string
+	Tokens       []gumble.AccessTokens
+	VT           []VTStruct
+	Accounts     int
+	ChannelsList []ChannelsListStruct
 )
 
 //HD44780 LCD Screen Settings Golbal Variables
@@ -638,13 +731,15 @@ var (
 
 // Generic Local Variables
 var (
-	txcounter   int
-	isTx        bool
-	pstream     *gumbleffmpeg.Stream
-	LastSpeaker string = ""
+	txcounter      int
+	isTx           bool
+	pstream        *gumbleffmpeg.Stream
+	LastSpeaker    string = ""
+	RotaryFunction rotaryFunctionsStruct
 )
 
 var StreamTracker = map[uint32]streamTrackerStruct{}
+var DMOSetup sa818.DMOSetupStruct
 
 func readxmlconfig(file string, reloadxml bool) error {
 	var ReConfig ConfigStruct
@@ -904,6 +999,7 @@ func printxmlconfig() {
 		log.Println("info: SimplexWithMute                  ", fmt.Sprintf("%t", Config.Global.Software.Settings.SimplexWithMute))
 		log.Println("info: TxCounter                        ", fmt.Sprintf("%t", Config.Global.Software.Settings.TxCounter))
 		log.Println("info: NextServerIndex                  ", fmt.Sprintf("%v", Config.Global.Software.Settings.NextServerIndex))
+		log.Println("info: TXLockOut                        ", fmt.Sprintf("%t", Config.Global.Software.Settings.TXLockOut))
 	} else {
 		log.Println("info: -------- System Settings -------- SKIPPED ")
 	}
@@ -995,7 +1091,8 @@ func printxmlconfig() {
 	if Config.Global.Software.PrintVariables.PrintMQTT {
 		log.Println("info: ------------ MQTT Function -------------- ")
 		log.Println("info: Enabled             " + fmt.Sprintf("%v", Config.Global.Software.RemoteControl.MQTT.Enabled))
-		log.Println("info: Topic               " + fmt.Sprintf("%v", Config.Global.Software.RemoteControl.MQTT.Settings.MQTTTopic))
+		log.Println("info: Subscibe Topic      " + fmt.Sprintf("%v", Config.Global.Software.RemoteControl.MQTT.Settings.MQTTSubTopic))
+		log.Println("info: Publish  Topic      " + fmt.Sprintf("%v", Config.Global.Software.RemoteControl.MQTT.Settings.MQTTPubTopic))
 		log.Println("info: Broker              " + fmt.Sprintf("%v", Config.Global.Software.RemoteControl.MQTT.Settings.MQTTBroker))
 		log.Println("info: Password            " + fmt.Sprintf("%v", Config.Global.Software.RemoteControl.MQTT.Settings.MQTTPassword))
 		log.Println("info: Id                  " + fmt.Sprintf("%v", Config.Global.Software.RemoteControl.MQTT.Settings.MQTTId))
@@ -1075,7 +1172,16 @@ func printxmlconfig() {
 	if Config.Global.Software.PrintVariables.PrintPins {
 		log.Println("info: ------------  PINS -------------- ")
 		for _, pins := range Config.Global.Hardware.IO.Pins.Pin {
-			log.Printf("info: Direction=%v Device%v Name=%v PinNo=%v Type=%v ID=%v Enabled=%v\n", pins.Direction, pins.Device, pins.Name, pins.PinNo, pins.Type, pins.ID, pins.Enabled)
+			log.Printf("info: Direction=%v Device%v Name=%v PinNo=%v Type=%v ID=%v Inverted=%v Enabled=%v\n", pins.Direction, pins.Device, pins.Name, pins.PinNo, pins.Type, pins.ID, pins.Inverted, pins.Enabled)
+		}
+	} else {
+		log.Println("info: ------------  PINS -------------- SKIPPED")
+	}
+
+	if Config.Global.Software.PrintVariables.PrintRotary {
+		log.Println("info: ------------  Rotary -------------- ")
+		for _, control := range Config.Global.Hardware.IO.RotaryEncoder.Control {
+			log.Printf("info: Enabled=%v Fuction=%v\n", control.Enabled, control.Function)
 		}
 	} else {
 		log.Println("info: ------------  PINS -------------- SKIPPED")
@@ -1246,6 +1352,32 @@ func printxmlconfig() {
 		log.Println("info: ------------ KeyboardMap Function ------ SKIPPED ")
 	}
 
+	if Config.Global.Software.PrintVariables.PrintRadioModule {
+		log.Println("info: ------------ RadioModule Function -------------- ")
+		log.Println("info: Radio  Enabled     " + fmt.Sprintf("%v", Config.Global.Hardware.Radio.Enabled))
+		log.Println("info: SA818  Enabled     " + fmt.Sprintf("%v", Config.Global.Hardware.Radio.Sa818.Enabled))
+		log.Println("info: SA818  PD Enabled  " + fmt.Sprintf("%v", Config.Global.Hardware.Radio.Sa818.PDEnabled))
+		log.Println("info: Connect Channel ID " + fmt.Sprintf("%v", Config.Global.Hardware.Radio.ConnectChannelID))
+		log.Println("info: Serial Enabled  " + fmt.Sprintf("%v", Config.Global.Hardware.Radio.Sa818.Serial.Enabled))
+		log.Println("info: Serial Port     " + fmt.Sprintf("%v", Config.Global.Hardware.Radio.Sa818.Serial.Port))
+		log.Println("info: Serial Baud     " + fmt.Sprintf("%v", Config.Global.Hardware.Radio.Sa818.Serial.Baud))
+		log.Println("info: Serial DataBits " + fmt.Sprintf("%v", Config.Global.Hardware.Radio.Sa818.Serial.Databits))
+		log.Println("info: Serial StopBits " + fmt.Sprintf("%v", Config.Global.Hardware.Radio.Sa818.Serial.Stopbits))
+		counter := 1
+		for _, channel := range Config.Global.Hardware.Radio.Sa818.Channels.Channel {
+			if channel.Enabled {
+				var ChannelIsCurrent string = "x"
+				if channel.ID == Config.Global.Hardware.Radio.ConnectChannelID {
+					ChannelIsCurrent = "✓"
+				}
+				log.Printf("info: %v %v. Bandwidth %v RXFreq %vMhz, TXFreq %vMhz Squelch %v CTSS Tone %v DCS Tone %v Pre/DeEmph %v Highpass %v Lowpass %v Volume %v TXPower %v\n", ChannelIsCurrent, counter, channel.Bandwidth, channel.Rxfreq, channel.Txfreq, channel.Squelch, channel.Ctcsstone, channel.Dcstone, channel.Predeemph, channel.Highpass, channel.Lowpass, channel.Volume, channel.TXPower)
+				counter++
+			}
+		}
+	} else {
+		log.Println("info: ------------ KeyboardMap Function ------ SKIPPED ")
+	}
+
 	if Config.Global.Software.PrintVariables.PrintMultimedia {
 		log.Println("info: ------------ Multimedia Function -------------- ")
 		for _, value := range Config.Global.Multimedia.ID {
@@ -1399,7 +1531,7 @@ func CheckConfigSanity(reloadxml bool) {
 				Warnings++
 			}
 
-			if !(gpio.Name == "voiceactivity" || gpio.Name == "participants" || gpio.Name == "transmit" || gpio.Name == "online" || gpio.Name == "attention" || gpio.Name == "voicetarget" || gpio.Name == "heartbeat" || gpio.Name == "backlight" || gpio.Name == "relay0" || gpio.Name == "txptt" || gpio.Name == "txtoggle" || gpio.Name == "channelup" || gpio.Name == "channeldown" || gpio.Name == "panic" || gpio.Name == "streamtoggle" || gpio.Name == "comment" || gpio.Name == "rotarya" || gpio.Name == "rotaryb" || gpio.Name == "volup" || gpio.Name == "voldown") {
+			if !(gpio.Name == "voiceactivity" || gpio.Name == "participants" || gpio.Name == "transmit" || gpio.Name == "online" || gpio.Name == "attention" || gpio.Name == "voicetarget" || gpio.Name == "heartbeat" || gpio.Name == "backlight" || gpio.Name == "relay0" || gpio.Name == "txptt" || gpio.Name == "txtoggle" || gpio.Name == "channelup" || gpio.Name == "channeldown" || gpio.Name == "panic" || gpio.Name == "streamtoggle" || gpio.Name == "comment" || gpio.Name == "rotarya" || gpio.Name == "rotaryb" || gpio.Name == "rotarybutton" || gpio.Name == "volup" || gpio.Name == "voldown") {
 				log.Printf("warn: Config Error [Section GPIO] Enabled GPIO Name %v Pin Number %v Invalid Name\n", gpio.Name, gpio.PinNo)
 				Config.Global.Hardware.IO.Pins.Pin[index].Enabled = false
 				Warnings++
@@ -1535,8 +1667,13 @@ func CheckConfigSanity(reloadxml bool) {
 
 	if Config.Global.Software.RemoteControl.MQTT.Enabled {
 
-		if len(Config.Global.Software.RemoteControl.MQTT.Settings.MQTTTopic) == 0 {
-			log.Println("warn: Config Error [Section MQTT] Enabled MQTT With Empty Topic")
+		if len(Config.Global.Software.RemoteControl.MQTT.Settings.MQTTSubTopic) == 0 {
+			log.Println("warn: Config Error [Section MQTT] Enabled MQTT With Empty Sub Topic")
+			Config.Global.Software.RemoteControl.MQTT.Enabled = false
+			Warnings++
+		}
+		if len(Config.Global.Software.RemoteControl.MQTT.Settings.MQTTPubTopic) == 0 {
+			log.Println("warn: Config Error [Section MQTT] Enabled MQTT With Empty Pub Topic")
 			Config.Global.Software.RemoteControl.MQTT.Enabled = false
 			Warnings++
 		}
@@ -1567,7 +1704,7 @@ func CheckConfigSanity(reloadxml bool) {
 
 	for index, keyboard := range Config.Global.Hardware.Keyboard.Command {
 		if keyboard.Enabled {
-			if !(keyboard.Action == "channelup" || keyboard.Action == "channeldown" || keyboard.Action == "serverup" || keyboard.Action == "serverdown" || keyboard.Action == "mute" || keyboard.Action == "unmute" || keyboard.Action == "mute-toggle" || keyboard.Action == "stream-toggle" || keyboard.Action == "volumeup" || keyboard.Action == "volumedown" || keyboard.Action == "setcomment" || keyboard.Action == "transmitstart" || keyboard.Action == "transmitstop" || keyboard.Action == "record" || keyboard.Action == "voicetargetset") || keyboard.Action == "volup" || keyboard.Action == "voldown" {
+			if !(keyboard.Action == "channelup" || keyboard.Action == "channeldown" || keyboard.Action == "serverup" || keyboard.Action == "serverdown" || keyboard.Action == "mute" || keyboard.Action == "unmute" || keyboard.Action == "mute-toggle" || keyboard.Action == "stream-toggle" || keyboard.Action == "volumeup" || keyboard.Action == "volumedown" || keyboard.Action == "setcomment" || keyboard.Action == "transmitstart" || keyboard.Action == "transmitstop" || keyboard.Action == "record" || keyboard.Action == "voicetargetset" || keyboard.Action == "volup" || keyboard.Action == "voldown" || keyboard.Action == "mqttpubpayloadset") {
 				log.Printf("warn: Config Error [Section Keyboard] Enabled Keyboard Action %v Invalid\n", keyboard.Action)
 				Config.Global.Hardware.Keyboard.Command[index].Enabled = false
 				Warnings++

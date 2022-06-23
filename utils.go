@@ -381,19 +381,28 @@ func downloadIfNotExists(fileName string, text string, language string) {
 		url := fmt.Sprintf("http://translate.google.com/translate_tts?ie=UTF-8&total=1&idx=0&textlen=32&client=tw-ob&q=%s&tl=%s", url.QueryEscape(text), language)
 		response, err := http.Get(url)
 		if err != nil {
+			log.Println("error: TTS Module URL Error ", err)
 			return
 		}
 		defer response.Body.Close()
 
 		output, err := os.Create(fileName)
 		if err != nil {
+			log.Println("error: TTS Module Create File Error ", err)
 			return
 		}
+		defer output.Close()
 
-		_, _ = io.Copy(output, response.Body)
+		_, err = io.Copy(output, response.Body)
+		if err != nil {
+			log.Println("error: TTS Module IO Copy Error ", err)
+			return
+		}
+		log.Printf("debug: TTS Module Created File %v From TTS Message=%v\n", fileName, text)
+	} else {
+		log.Printf("debug: TTS Module Used Existing File %v From TTS Message=%v\n", fileName, text)
 	}
-
-	f.Close()
+	defer f.Close()
 }
 
 func generateHashName(name string) string {
@@ -451,4 +460,103 @@ func checkGitHubVersion() string {
 	}
 
 	return talkkonnectVersion
+}
+
+func checkSBCVersion() string {
+	if Config.Global.Hardware.TargetBoard != "rpi" {
+		return "unknown"
+	}
+
+	fileContent, err := ioutil.ReadFile("/proc/device-tree/model")
+	if err != nil {
+		log.Println("error: Cannot Check Raspberry Pi Board Version")
+		return "unknown"
+	}
+
+	return string(fileContent[:])
+}
+
+func findMQTTButton(findMQTTButton string) mqttPubButtonStruct {
+	for _, button := range Config.Global.Software.RemoteControl.MQTT.Settings.Pubpayload.Mqtt {
+		if button.Item == findMQTTButton && button.Enabled {
+			return mqttPubButtonStruct{button.Item, button.Payload, button.Enabled}
+		}
+	}
+	return mqttPubButtonStruct{"", "", false}
+}
+
+func txScreen() {
+	if LCDEnabled {
+		LcdText[0] = "Online/TX"
+		LcdText[3] = "TX at " + time.Now().Format("15:04:05")
+		LcdDisplay(LcdText, LCDRSPin, LCDEPin, LCDD4Pin, LCDD5Pin, LCDD6Pin, LCDD7Pin, LCDInterfaceType, LCDI2CAddress)
+	}
+	if OLEDEnabled {
+		Oled.DisplayOn()
+		LCDIsDark = false
+		oledDisplay(false, 0, 1, "Online/TX")
+		oledDisplay(false, 3, 1, "TX at "+time.Now().Format("15:04:05"))
+		oledDisplay(false, 4, 1, "")
+		oledDisplay(false, 5, 1, "")
+		oledDisplay(false, 6, 1, "Please Visit       ")
+		oledDisplay(false, 7, 1, "www.talkkonnect.com")
+	}
+}
+
+func rxScreen(LastSpeaker string) {
+	if LCDEnabled && Config.Global.Hardware.TargetBoard == "rpi" {
+		GPIOOutPin("backlight", "on")
+		lcdtext = [4]string{"nil", "", "", LastSpeaker + " " + time.Now().Format("15:04:05")}
+		LcdDisplay(lcdtext, LCDRSPin, LCDEPin, LCDD4Pin, LCDD5Pin, LCDD6Pin, LCDD7Pin, LCDInterfaceType, LCDI2CAddress)
+		BackLightTime.Reset(time.Duration(LCDBackLightTimeout) * time.Second)
+	}
+	if OLEDEnabled && Config.Global.Hardware.TargetBoard == "rpi" {
+		Oled.DisplayOn()
+		oledDisplay(false, 3, 1, LastSpeaker+" "+time.Now().Format("15:04:05"))
+		oledDisplay(false, 4, 1, "")
+		oledDisplay(false, 5, 1, "")
+		oledDisplay(false, 6, 1, "Please Visit       ")
+		oledDisplay(false, 7, 1, "www.talkkonnect.com")
+		BackLightTime.Reset(time.Duration(LCDBackLightTimeout) * time.Second)
+	}
+}
+
+func (b *Talkkonnect) VTMove(command string) {
+	var TargetID uint32
+	for Index := range Config.Accounts.Account[AccountIndex].Voicetargets.ID {
+		targetCount := len(Config.Accounts.Account[AccountIndex].Voicetargets.ID) - 1
+		if command == "up" {
+			if Index <= targetCount {
+				if Config.Accounts.Account[AccountIndex].Voicetargets.ID[Index].IsCurrent {
+					Config.Accounts.Account[AccountIndex].Voicetargets.ID[CurrentIndex].IsCurrent = false
+					if Index < targetCount {
+						CurrentIndex = Index + 1
+					}
+					if Index == targetCount {
+						CurrentIndex = 0
+					}
+					Config.Accounts.Account[AccountIndex].Voicetargets.ID[CurrentIndex].IsCurrent = true
+					TargetID = Config.Accounts.Account[AccountIndex].Voicetargets.ID[CurrentIndex].Value
+					break
+				}
+			}
+		}
+		if command == "down" {
+			if Index >= 0 {
+				if Config.Accounts.Account[AccountIndex].Voicetargets.ID[Index].IsCurrent {
+					Config.Accounts.Account[AccountIndex].Voicetargets.ID[CurrentIndex].IsCurrent = false
+					if Index > 0 {
+						CurrentIndex = Index - 1
+					}
+					if Index == 0 {
+						CurrentIndex = targetCount
+					}
+					Config.Accounts.Account[AccountIndex].Voicetargets.ID[CurrentIndex].IsCurrent = true
+					TargetID = Config.Accounts.Account[AccountIndex].Voicetargets.ID[CurrentIndex].Value
+					break
+				}
+			}
+		}
+	}
+	b.cmdSendVoiceTargets(TargetID)
 }

@@ -63,12 +63,11 @@ func (b *Talkkonnect) OnConnect(e *gumble.ConnectEvent) {
 		b.Client.Send(ATokens)
 	}
 
-	log.Printf("debug: Connected to %s Address %s on attempt %d index [%d]\n ", b.Name, b.Client.Conn.RemoteAddr(), b.ConnectAttempts, AccountIndex)
+	log.Printf("info: Connected to %s Address %s on attempt %d index [%d] ", b.Name, b.Client.Conn.RemoteAddr(), b.ConnectAttempts, AccountIndex)
 	if e.WelcomeMessage != nil {
 		var tmessage string = fmt.Sprintf("%v", esc(*e.WelcomeMessage))
-		log.Println("info: Welcome message: ")
-		for _, line := range strings.Split(strings.TrimSuffix(tmessage, "\n"), "\n") {
-			log.Println("info: ", line)
+		for _, line := range strings.Split(strings.TrimSpace(tmessage), "\n") {
+			log.Println("info: ", strings.TrimSpace(line))
 		}
 	}
 
@@ -176,30 +175,39 @@ func (b *Talkkonnect) OnTextMessage(e *gumble.TextMessageEvent) {
 				oledDisplay(false, 5, 1, "")
 				oledDisplay(false, 6, 1, "")
 				oledDisplay(false, 7, 1, "")
-			} else if len(tmessage) <= 42 {
+				return
+			}
+			if len(tmessage) <= 42 {
 				oledDisplay(false, 3, 1, tmessage[0:21])
-				oledDisplay(false, 4, 1, tmessage[21:41])
+				oledDisplay(false, 4, 1, tmessage[21:])
 				oledDisplay(false, 5, 1, "")
 				oledDisplay(false, 6, 1, "")
 				oledDisplay(false, 7, 1, "")
-			} else if len(tmessage) <= 63 {
+				return
+			}
+			if len(tmessage) <= 63 {
 				oledDisplay(false, 3, 1, tmessage[0:21])
 				oledDisplay(false, 4, 1, tmessage[21:42])
 				oledDisplay(false, 5, 1, tmessage[42:])
 				oledDisplay(false, 6, 1, "")
 				oledDisplay(false, 7, 1, "")
-			} else if len(tmessage) <= 84 {
+				return
+			}
+			if len(tmessage) <= 84 {
 				oledDisplay(false, 3, 1, tmessage[0:21])
 				oledDisplay(false, 4, 1, tmessage[21:42])
 				oledDisplay(false, 5, 1, tmessage[42:63])
 				oledDisplay(false, 6, 1, tmessage[63:])
 				oledDisplay(false, 7, 1, "")
-			} else if len(tmessage) <= 105 {
+				return
+			}
+			if len(tmessage) <= 105 {
 				oledDisplay(false, 3, 1, tmessage[0:20])
 				oledDisplay(false, 4, 1, tmessage[21:44])
 				oledDisplay(false, 5, 1, tmessage[42:63])
 				oledDisplay(false, 6, 1, tmessage[63:84])
-				oledDisplay(false, 7, 1, tmessage[84:105])
+				oledDisplay(false, 7, 1, tmessage[84:])
+				return
 			}
 		}
 	}
@@ -208,16 +216,17 @@ func (b *Talkkonnect) OnTextMessage(e *gumble.TextMessageEvent) {
 
 func (b *Talkkonnect) OnUserChange(e *gumble.UserChangeEvent) {
 	b.BackLightTimer()
-
 	var info string
-
 	switch e.Type {
 	case gumble.UserChangeConnected:
-		info = "conn"
+		info = "connected"
+		b.ParticipantLEDUpdate(true)
 	case gumble.UserChangeDisconnected:
-		info = "disconnected!"
+		info = "disconnected"
+		b.ParticipantLEDUpdate(true)
 	case gumble.UserChangeKicked:
 		info = "kicked"
+		b.ParticipantLEDUpdate(true)
 	case gumble.UserChangeBanned:
 		info = "banned"
 	case gumble.UserChangeRegistered:
@@ -225,15 +234,9 @@ func (b *Talkkonnect) OnUserChange(e *gumble.UserChangeEvent) {
 	case gumble.UserChangeUnregistered:
 		info = "unregistered"
 	case gumble.UserChangeName:
-		info = "chg name"
+		info = "changed name"
 	case gumble.UserChangeChannel:
-		info = "chg channel"
-		log.Println("info:", cleanstring(e.User.Name), " Changed Channel to ", e.User.Channel.Name)
-		LcdText[2] = cleanstring(e.User.Name) + "->" + e.User.Channel.Name
-		LcdText[3] = ""
-		if Config.Global.Hardware.IO.Max7219.Enabled {
-			Max7219(Config.Global.Hardware.IO.Max7219.Max7219Cascaded, Config.Global.Hardware.IO.Max7219.SPIBus, Config.Global.Hardware.IO.Max7219.SPIDevice, Config.Global.Hardware.IO.Max7219.Brightness, strconv.Itoa(int(b.Client.Self.Channel.ID)))
-		}
+		info = "changed channel"
 	case gumble.UserChangeComment:
 		info = "chg comment"
 	case gumble.UserChangeAudio:
@@ -244,100 +247,57 @@ func (b *Talkkonnect) OnUserChange(e *gumble.UserChangeEvent) {
 		info = "chg rec status"
 	case gumble.UserChangeStats:
 		info = "chg stats"
-
-		if info != "chg channel" {
-			if info != "" {
-				log.Println("info: User ", cleanstring(e.User.Name), " ", info, "Event type=", e.Type, " channel=", e.User.Channel.Name)
-
-				for _, tts := range Config.Global.Software.TTS.Sound {
-					if tts.Action == "participants" {
-						if tts.Enabled {
-							b.Speak("User "+cleanstring(e.User.Name)+info+"Has Changed to "+e.User.Channel.Name, "local", 1, 0, 1, Config.Global.Software.TTSMessages.TTSLanguage)
-						}
-					}
-				}
-			}
-
-		} else {
-			log.Println("info: User ", cleanstring(e.User.Name), " Event type=", e.Type, " channel=", e.User.Channel.Name)
-		}
-
-		LcdText[2] = cleanstring(e.User.Name) + " " + info //+strconv.Atoi(string(e.Type))
-
 	}
-
-	b.ParticipantLEDUpdate(true)
+	if len(info) > 0 {
+		if info == "changed channel" {
+			b.ParticipantLEDUpdate(false)
+		}
+		log.Printf("info: User %vs %v\n", cleanstring(e.User.Name), info)
+	} else {
+		b.ParticipantLEDUpdate(true)
+	}
 }
 
 func (b *Talkkonnect) OnPermissionDenied(e *gumble.PermissionDeniedEvent) {
-	var info string
-
 	switch e.Type {
-	case gumble.PermissionDeniedOther:
-		info = e.String
 	case gumble.PermissionDeniedPermission:
-		info = "insufficient permissions"
-		LcdText[2] = "insufficient perms"
-
-		// Set Upper Boundary
-		if prevButtonPress == "ChannelUp" && b.Client.Self.Channel.ID == maxchannelid {
-			log.Println("error: Can't Increment Channel Maximum Channel Reached")
-		}
-
-		// Set Lower Boundary
-		if prevButtonPress == "ChannelDown" && currentChannelID == 0 {
-			log.Println("error: Can't Increment Channel Minimum Channel Reached")
-		}
-
-		// Implement Seek Up Until Permissions are Sufficient for User to Join Channel whilst avoiding all null channels
-		if prevButtonPress == "ChannelUp" && b.Client.Self.Channel.ID+1 < maxchannelid {
-			prevChannelID++
-			b.ChannelUp()
-			LcdText[1] = b.Client.Self.Channel.Name + " (" + strconv.Itoa(len(b.Client.Self.Channel.Users)) + " Users)"
-		}
-
-		// Implement Seek Dwn Until Permissions are Sufficient for User to Join Channel whilst avoiding all null channels
-		if prevButtonPress == "ChannelDown" && int(b.Client.Self.Channel.ID) > 0 {
-			prevChannelID--
-			b.ChannelDown()
-			LcdText[1] = b.Client.Self.Channel.Name + " (" + strconv.Itoa(len(b.Client.Self.Channel.Users)) + " Users)"
-		}
-
-		if Config.Global.Hardware.TargetBoard == "rpi" {
-			if LCDEnabled {
-				LcdDisplay(LcdText, LCDRSPin, LCDEPin, LCDD4Pin, LCDD5Pin, LCDD6Pin, LCDD7Pin, LCDInterfaceType, LCDI2CAddress)
-			}
-			if OLEDEnabled {
-				oledDisplay(false, 1, 1, LcdText[1])
-				oledDisplay(false, 2, 1, LcdText[2])
+		log.Printf("warn: Permission Denied For Channel ID %v Channel Name %v\n", e.Channel.ID, e.Channel.Name)
+		for index, ch := range ChannelsList {
+			if ch.chanID == int(e.Channel.ID) {
+				log.Printf("warn: Setting Channel Index %v Channel ID %v Channel Name %v Channel Enter to False\n", index, e.Channel.ID, e.Channel.Name)
+				ChannelsList[index].chanenterPermissions = false
+				if ChannelAction == "channelup" {
+					b.ChannelUp()
+				}
+				if ChannelAction == "channeldown" {
+					b.ChannelDown()
+				}
+				break
 			}
 		}
-
 	case gumble.PermissionDeniedSuperUser:
-		info = "cannot modify SuperUser"
+		log.Println("cannot modify SuperUser")
 	case gumble.PermissionDeniedInvalidChannelName:
-		info = "invalid channel name"
+		log.Println("invalid channel name")
 	case gumble.PermissionDeniedTextTooLong:
-		info = "text too long"
+		log.Println("text too long")
 	case gumble.PermissionDeniedTemporaryChannel:
-		info = "temporary channel"
+		log.Println("temporary channel")
 	case gumble.PermissionDeniedMissingCertificate:
-		info = "missing certificate"
+		log.Println("missing certificate")
 	case gumble.PermissionDeniedInvalidUserName:
-		info = "invalid user name"
+		log.Println("invalid user name")
 	case gumble.PermissionDeniedChannelFull:
-		info = "channel full"
+		log.Println("channel full")
 	case gumble.PermissionDeniedNestingLimit:
-		info = "nesting limit"
+		log.Println("nesting limit")
+	case gumble.PermissionDeniedOther:
+		log.Println("other")
 	}
-
-	LcdText[2] = info
-
-	log.Printf("error: Permission denied %v to Join Channel %v\n", info, e.Channel.Name)
 }
 
 func (b *Talkkonnect) OnChannelChange(e *gumble.ChannelChangeEvent) {
-	log.Println("debug: Channel Change Event Detected")
+	log.Println("alert: Channel Change Event Detected")
 }
 
 func (b *Talkkonnect) OnUserList(e *gumble.UserListEvent) {

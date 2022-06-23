@@ -44,7 +44,7 @@ import (
 	"time"
 
 	"github.com/allan-simon/go-singleinstance"
-	"github.com/comail/colog"
+	"github.com/talkkonnect/colog"
 	hd44780 "github.com/talkkonnect/go-hd44780"
 	"github.com/talkkonnect/gumble/gumble"
 	"github.com/talkkonnect/gumble/gumbleffmpeg"
@@ -55,10 +55,8 @@ import (
 )
 
 var (
-	currentChannelID     uint32
 	prevChannelID        uint32
-	prevParticipantCount int    = 0
-	prevButtonPress      string = "none"
+	prevParticipantCount int = 0
 	maxchannelid         uint32
 	tmessage             string
 	isrepeattx           bool = true
@@ -82,10 +80,12 @@ type Talkkonnect struct {
 }
 
 type ChannelsListStruct struct {
-	chanID     uint32
-	chanName   string
-	chanParent *gumble.Channel
-	chanUsers  int
+	chanIndex            int
+	chanID               int
+	chanName             string
+	chanParent           *gumble.Channel
+	chanUsers            gumble.Users
+	chanenterPermissions bool
 }
 
 func Init(file string, ServerIndex string) {
@@ -179,7 +179,7 @@ func Init(file string, ServerIndex string) {
 	if Config.Global.Software.RemoteControl.MQTT.Enabled {
 		log.Printf("info: Attempting to Contact MQTT Server")
 		log.Printf("info: MQTT Broker      : %s\n", Config.Global.Software.RemoteControl.MQTT.Settings.MQTTBroker)
-		log.Printf("info: Subscribed topic : %s\n", Config.Global.Software.RemoteControl.MQTT.Settings.MQTTTopic)
+		log.Printf("info: Subscribed topic : %s\n", Config.Global.Software.RemoteControl.MQTT.Settings.MQTTSubTopic)
 		go b.mqttsubscribe()
 	} else {
 		log.Printf("info: MQTT Server Subscription Disabled in Config")
@@ -320,7 +320,7 @@ func (b *Talkkonnect) ClientStart() {
 		log.Println("debug: Backlight Timer Disabled by Config")
 	}
 
-	talkkonnectBanner("\u001b[44;1m") // add blue background to banner reference https://www.lihaoyi.com/post/BuildyourownCommandLinewithANSIescapecodes.html#background-colors
+	talkkonnectBanner("\x1b[0;44m") // add blue background to banner reference https://www.lihaoyi.com/post/BuildyourownCommandLinewithANSIescapecodes.html#background-colors
 
 	err = volume.Unmute(Config.Global.Software.Settings.OutputDevice)
 
@@ -447,16 +447,6 @@ func (b *Talkkonnect) ClientStart() {
 
 	}
 
-	if Config.Global.Software.Settings.StreamOnStart {
-		time.Sleep(Config.Global.Software.Settings.StreamOnStartAfter * time.Second)
-		b.cmdPlayback()
-	}
-
-	if Config.Global.Software.Settings.TXOnStart {
-		time.Sleep(Config.Global.Software.Settings.TXOnStartAfter * time.Second)
-		b.cmdStartTransmitting()
-	}
-
 	go func() {
 		var RXLEDStatus bool
 		for {
@@ -469,179 +459,219 @@ func (b *Talkkonnect) ClientStart() {
 				if !RXLEDStatus {
 					log.Println("info: Speaking->", v.WhoTalking)
 					RXLEDStatus = true
+					txlockout := &TXLockOut
+					*txlockout = true
 					go GPIOOutPin("voiceactivity", "on")
-					//MyLedStripVoiceActivityLEDOn()
-					if LCDEnabled && Config.Global.Hardware.TargetBoard == "rpi" {
-						GPIOOutPin("backlight", "on")
-						lcdtext = [4]string{"nil", "", "", LastSpeaker + " " + time.Now().Format("15:04:05")}
-						LcdDisplay(lcdtext, LCDRSPin, LCDEPin, LCDD4Pin, LCDD5Pin, LCDD6Pin, LCDD7Pin, LCDInterfaceType, LCDI2CAddress)
-						BackLightTime.Reset(time.Duration(LCDBackLightTimeout) * time.Second)
-					}
-
-					if OLEDEnabled && Config.Global.Hardware.TargetBoard == "rpi" {
-						Oled.DisplayOn()
-						go oledDisplay(false, 3, 1, LastSpeaker+" "+time.Now().Format("15:04:05"))
-						BackLightTime.Reset(time.Duration(LCDBackLightTimeout) * time.Second)
-					}
-
+					MyLedStripVoiceActivityLEDOn()
+					go rxScreen(LastSpeaker)
 				}
 			case <-TalkedTicker.C:
 				if RXLEDStatus {
 					RXLEDStatus = false
+					txlockout := &TXLockOut
+					*txlockout = false
 					go GPIOOutPin("voiceactivity", "off")
-					//MyLedStripVoiceActivityLEDOff()
+					MyLedStripVoiceActivityLEDOff()
 					//TalkedTicker.Stop()
 				}
 			}
 		}
 	}()
 
-	if Config.Global.Hardware.GPS.GpsInfoVerbose {
-		go consoleScreenLogging()
+	if Config.Global.Hardware.GPS.Enabled {
+		if Config.Global.Hardware.GPS.GpsInfoVerbose {
+			go consoleScreenLogging()
+		}
+
+		if Config.Global.Hardware.TargetBoard == "rpi" && Config.Global.Hardware.Traccar.DeviceScreenEnabled && (Config.Global.Hardware.LCD.Enabled || Config.Global.Hardware.OLED.Enabled) {
+			go gpsDisplayShow()
+		}
+
+		if Config.Global.Hardware.Traccar.Enabled {
+			if Config.Global.Hardware.Traccar.Track && Config.Global.Hardware.Traccar.Protocol.Name == "osmand" {
+				go httpSendTraccar("osmand")
+			}
+
+			if Config.Global.Hardware.Traccar.Track && Config.Global.Hardware.Traccar.Protocol.Name == "opengts" {
+				go httpSendTraccar("opengts")
+			}
+
+			if Config.Global.Hardware.Traccar.Track && Config.Global.Hardware.Traccar.Protocol.Name == "t55" {
+				go tcpSendT55Traccar()
+			}
+		}
 	}
 
-	if Config.Global.Hardware.TargetBoard == "rpi" && Config.Global.Hardware.Traccar.DeviceScreenEnabled {
-		go localScreenLogging()
+	if Config.Global.Hardware.Radio.Enabled {
+		if !(Config.Global.Hardware.Radio.Sa818.Enabled && Config.Global.Hardware.Radio.Sa818.Serial.Enabled) {
+			log.Println("error: Radio Module Not Configured Properly")
+		} else {
+			createEnabledRadioChannels()
+			go radioSetChannel(Config.Global.Hardware.Radio.ConnectChannelID)
+		}
 	}
 
-	if Config.Global.Hardware.Traccar.Enabled && Config.Global.Hardware.Traccar.Track && Config.Global.Hardware.Traccar.Protocol.Name == "osmand" {
-		go httpSendTraccar("osmand")
+	if Config.Global.Software.Settings.StreamOnStart {
+		time.Sleep(Config.Global.Software.Settings.StreamOnStartAfter * time.Second)
+		b.cmdPlayback()
 	}
 
-	if Config.Global.Hardware.Traccar.Enabled && Config.Global.Hardware.Traccar.Track && Config.Global.Hardware.Traccar.Protocol.Name == "opengts" {
-		go httpSendTraccar("opengts")
+	if Config.Global.Software.Settings.TXOnStart {
+		time.Sleep(Config.Global.Software.Settings.TXOnStartAfter * time.Second)
+		b.cmdStartTransmitting()
 	}
 
-	if Config.Global.Hardware.Traccar.Enabled && Config.Global.Hardware.Traccar.Track && Config.Global.Hardware.Traccar.Protocol.Name == "t55" {
-		go tcpSendT55Traccar()
+	if Config.Global.Hardware.IO.RotaryEncoder.Enabled {
+		createEnabledRotaryEncoderFunctions()
+		if len(RotaryFunctions) > 0 {
+			RotaryFunction.Item = RotaryFunctions[0].Item
+			RotaryFunction.Function = RotaryFunctions[0].Function
+		} else {
+			RotaryFunction.Item = 0
+			RotaryFunction.Function = "undefined"
+		}
+		log.Printf("info: Current Rotary Item %v Function %v\n", RotaryFunction.Item, RotaryFunction.Function)
 	}
+
+	b.ListChannels(true)
+
+	// Set VT index to Zero
+	Config.Accounts.Account[AccountIndex].Voicetargets.ID[0].IsCurrent = true
+	b.sevenSegment("mumblechannel", strconv.Itoa(int(b.Client.Self.Channel.ID)))
 
 keyPressListenerLoop:
 	for {
-		switch ev := term.PollEvent(); ev.Type {
-		case term.EventKey:
-			switch ev.Key {
-			case term.KeyEsc:
-				log.Println("error: ESC Key is Invalid")
-				reset()
-				break keyPressListenerLoop
-			case term.KeyDelete:
-				b.cmdDisplayMenu()
-			case term.KeyF1:
-				b.cmdChannelUp()
-			case term.KeyF2:
-				b.cmdChannelDown()
-			case term.KeyF3:
-				b.cmdMuteUnmute("toggle")
-			case term.KeyF4:
-				b.cmdCurrentVolume()
-			case term.KeyF5:
-				b.cmdVolumeUp()
-			case term.KeyF6:
-				b.cmdVolumeDown()
-			case term.KeyF7:
-				b.cmdListServerChannels()
-			case term.KeyF8:
-				b.cmdStartTransmitting()
-			case term.KeyF9:
-				b.cmdStopTransmitting()
-			case term.KeyF10:
-				b.cmdListOnlineUsers()
-			case term.KeyF11:
-				b.cmdPlayback()
-			case term.KeyF12:
-				go b.cmdGPSPosition()
-			case term.KeyCtrlB:
-				b.cmdLiveReload()
-			case term.KeyCtrlC:
-				talkkonnectAcknowledgements("\u001b[44;1m") // add blue background to banner reference https://www.lihaoyi.com/post/BuildyourownCommandLinewithANSIescapecodes.html#background-colors
-				b.cmdQuitTalkkonnect()
-			case term.KeyCtrlD:
-				b.cmdDebugStacktrace()
-			case term.KeyCtrlE:
-				b.cmdSendEmail()
-			case term.KeyCtrlF:
-				b.cmdConnPreviousServer()
-			case term.KeyCtrlH:
-				cmdSanityCheck()
-			case term.KeyCtrlI: // New. Audio Recording. Traffic
-				b.cmdAudioTrafficRecord()
-			case term.KeyCtrlJ: // New. Audio Recording. Mic
-				b.cmdAudioMicRecord()
-			case term.KeyCtrlK: // New/ Audio Recording. Combo
-				b.cmdAudioMicTrafficRecord()
-			case term.KeyCtrlL:
-				b.cmdClearScreen()
-			case term.KeyCtrlO:
-				b.cmdPingServers()
-			case term.KeyCtrlN:
-				b.cmdConnNextServer()
-			case term.KeyCtrlP:
-				b.cmdPanicSimulation()
-			case term.KeyCtrlG:
-				b.cmdPlayRepeaterTone()
-			case term.KeyCtrlR:
-				b.cmdRepeatTxLoop()
-			case term.KeyCtrlS:
-				b.cmdScanChannels()
-			case term.KeyCtrlT:
-				cmdThanks()
-			case term.KeyCtrlU:
-				b.cmdShowUptime()
-			case term.KeyCtrlV:
-				b.cmdDisplayVersion()
-			case term.KeyCtrlX:
-				b.cmdDumpXMLConfig()
-			default:
-				if _, ok := TTYKeyMap[ev.Ch]; ok {
-					switch strings.ToLower(TTYKeyMap[ev.Ch].Command) {
-					case "channelup":
-						b.cmdChannelUp()
-					case "channeldown":
-						b.cmdChannelDown()
-					case "serverup":
-						b.cmdConnNextServer()
-					case "serverdown":
-						b.cmdConnPreviousServer()
-					case "mute":
-						b.cmdMuteUnmute("mute")
-					case "unmute":
-						b.cmdMuteUnmute("unmute")
-					case "mute-toggle":
-						b.cmdMuteUnmute("toggle")
-					case "stream-toggle":
-						b.cmdPlayback()
-					case "volumeup":
-						b.cmdVolumeUp()
-					case "volumedown":
-						b.cmdVolumeDown()
-					case "setcomment":
-						if TTYKeyMap[ev.Ch].ParamValue == "setcomment" {
-							log.Println("info: Set Commment ", TTYKeyMap[ev.Ch].ParamValue)
-							b.Client.Self.SetComment(TTYKeyMap[ev.Ch].ParamValue)
+		if IsConnected {
+			switch ev := term.PollEvent(); ev.Type {
+			case term.EventKey:
+				switch ev.Key {
+				case term.KeyEsc:
+					log.Println("error: ESC Key is Invalid")
+					reset()
+					break keyPressListenerLoop
+				case term.KeyDelete:
+					b.cmdDisplayMenu()
+				case term.KeyF1:
+					b.cmdChannelUp()
+				case term.KeyF2:
+					b.cmdChannelDown()
+				case term.KeyF3:
+					b.cmdMuteUnmute("toggle")
+				case term.KeyF4:
+					b.cmdCurrentVolume()
+				case term.KeyF5:
+					b.cmdVolumeUp()
+				case term.KeyF6:
+					b.cmdVolumeDown()
+				case term.KeyF7:
+					b.cmdListServerChannels()
+				case term.KeyF8:
+					b.cmdStartTransmitting()
+				case term.KeyF9:
+					b.cmdStopTransmitting()
+				case term.KeyF10:
+					b.cmdListOnlineUsers()
+				case term.KeyF11:
+					b.cmdPlayback()
+				case term.KeyF12:
+					go b.cmdGPSPosition()
+				case term.KeyCtrlB:
+					b.cmdLiveReload()
+				case term.KeyCtrlC:
+					talkkonnectAcknowledgements("\x1b[0;44m") // add blue background to banner reference https://www.lihaoyi.com/post/BuildyourownCommandLinewithANSIescapecodes.html#background-colors
+					b.cmdQuitTalkkonnect()
+				case term.KeyCtrlD:
+					b.cmdDebugStacktrace()
+				case term.KeyCtrlE:
+					b.cmdSendEmail()
+				case term.KeyCtrlF:
+					b.cmdConnPreviousServer()
+				case term.KeyCtrlH:
+					cmdSanityCheck()
+				case term.KeyCtrlI: // New. Audio Recording. Traffic
+					b.cmdAudioTrafficRecord()
+				case term.KeyCtrlJ: // New. Audio Recording. Mic
+					b.cmdAudioMicRecord()
+				case term.KeyCtrlK: // New/ Audio Recording. Combo
+					b.cmdAudioMicTrafficRecord()
+				case term.KeyCtrlL:
+					b.cmdClearScreen()
+				case term.KeyCtrlM:
+					b.cmdRadioChannelMove("Up")
+				case term.KeyCtrlN:
+					b.cmdRadioChannelMove("Down")
+				case term.KeyCtrlO:
+					b.cmdPingServers()
+				case term.KeyCtrlP:
+					b.cmdPanicSimulation()
+				case term.KeyCtrlG:
+					b.cmdPlayRepeaterTone()
+				case term.KeyCtrlR:
+					b.cmdRepeatTxLoop()
+				case term.KeyCtrlS:
+					b.cmdScanChannels()
+				case term.KeyCtrlT:
+					cmdThanks()
+				case term.KeyCtrlU:
+					b.cmdShowUptime()
+				case term.KeyCtrlV:
+					b.cmdDisplayVersion()
+				case term.KeyCtrlX:
+					b.cmdDumpXMLConfig()
+				case term.KeyCtrlZ:
+					b.nextEnabledRotaryEncoderFunction()
+					//b.cmdConnNextServer()
+				default:
+					if _, ok := TTYKeyMap[ev.Ch]; ok {
+						switch strings.ToLower(TTYKeyMap[ev.Ch].Command) {
+						case "channelup":
+							b.cmdChannelUp()
+						case "channeldown":
+							b.cmdChannelDown()
+						case "serverup":
+							b.cmdConnNextServer()
+						case "serverdown":
+							b.cmdConnPreviousServer()
+						case "mute":
+							b.cmdMuteUnmute("mute")
+						case "unmute":
+							b.cmdMuteUnmute("unmute")
+						case "mute-toggle":
+							b.cmdMuteUnmute("toggle")
+						case "stream-toggle":
+							b.cmdPlayback()
+						case "volumeup":
+							b.cmdVolumeUp()
+						case "volumedown":
+							b.cmdVolumeDown()
+						case "setcomment":
+							if TTYKeyMap[ev.Ch].ParamValue == "setcomment" {
+								log.Println("info: Set Commment ", TTYKeyMap[ev.Ch].ParamValue)
+								b.Client.Self.SetComment(TTYKeyMap[ev.Ch].ParamValue)
+							}
+						case "transmitstart":
+							b.cmdStartTransmitting()
+						case "transmitstop":
+							b.cmdStopTransmitting()
+						case "record":
+							b.cmdAudioTrafficRecord()
+							b.cmdAudioMicRecord()
+						case "voicetargetset":
+							Paramvalue, err := strconv.Atoi(TTYKeyMap[ev.Ch].ParamValue)
+							if err != nil {
+								log.Printf("error: Error Message %v, %v Is Not A Number", err, Paramvalue)
+							}
+							b.cmdSendVoiceTargets(uint32(Paramvalue))
+						default:
+							log.Println("error: Command Not Defined ", strings.ToLower(TTYKeyMap[ev.Ch].Command))
 						}
-					case "transmitstart":
-						b.cmdStartTransmitting()
-					case "transmitstop":
-						b.cmdStopTransmitting()
-					case "record":
-						b.cmdAudioTrafficRecord()
-						b.cmdAudioMicRecord()
-					case "voicetargetset":
-						Paramvalue, err := strconv.Atoi(TTYKeyMap[ev.Ch].ParamValue)
-						if err != nil {
-							log.Printf("error: Error Message %v, %v Is Not A Number", err, Paramvalue)
-						}
-						b.cmdSendVoiceTargets(uint32(Paramvalue))
-					default:
-						log.Println("error: Command Not Defined ", strings.ToLower(TTYKeyMap[ev.Ch].Command))
+					} else {
+						log.Println("warn: Key Not Mapped ASC ", ev.Ch)
 					}
-				} else {
-					log.Println("error: Key Not Mapped ASC ", ev.Ch)
 				}
+			case term.EventError:
+				FatalCleanUp("Terminal Error " + err.Error())
 			}
-		case term.EventError:
-			FatalCleanUp("Terminal Error " + err.Error())
 		}
 	}
 }

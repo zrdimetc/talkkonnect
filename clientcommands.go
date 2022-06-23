@@ -34,6 +34,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"sort"
 	"strconv"
 	"time"
 
@@ -127,7 +128,6 @@ func (b *Talkkonnect) TransmitStart() {
 	}
 
 	b.BackLightTimer()
-	t := time.Now()
 	LastSpeaker = ""
 	if Config.Global.Software.Settings.SimplexWithMute {
 		err := volume.Mute(Config.Global.Software.Settings.OutputDevice)
@@ -141,7 +141,6 @@ func (b *Talkkonnect) TransmitStart() {
 	if IsPlayStream {
 		IsPlayStream = false
 		NowStreaming = false
-		time.Sleep(100 * time.Millisecond)
 
 		for _, sound := range Config.Global.Software.Sounds.Sound {
 			if sound.Enabled {
@@ -155,21 +154,10 @@ func (b *Talkkonnect) TransmitStart() {
 	}
 
 	if Config.Global.Hardware.TargetBoard == "rpi" {
-		GPIOOutPin("transmit", "on")
-		MyLedStripTransmitLEDOn()
-		if LCDEnabled {
-			LcdText[0] = "Online/TX"
-			LcdText[3] = "TX at " + t.Format("15:04:05")
-			LcdDisplay(LcdText, LCDRSPin, LCDEPin, LCDD4Pin, LCDD5Pin, LCDD6Pin, LCDD7Pin, LCDInterfaceType, LCDI2CAddress)
-		}
-		if OLEDEnabled {
-			Oled.DisplayOn()
-			LCDIsDark = false
-			oledDisplay(false, 0, 1, "Online/TX")
-			oledDisplay(false, 3, 1, "TX at "+t.Format("15:04:05"))
-			oledDisplay(false, 6, 1, "Please Visit       ")
-			oledDisplay(false, 7, 1, "www.talkkonnect.com")
-		}
+		// use groutine so no need to wait for local screen cause it causes delay
+		go GPIOOutPin("transmit", "on")
+		go MyLedStripTransmitLEDOn()
+		go txScreen()
 	}
 
 	b.IsTransmitting = true
@@ -273,8 +261,8 @@ func (b *Talkkonnect) ParticipantLEDUpdate(verbose bool) {
 			}
 		}
 	}
-	if participantCount > 1 && participantCount != prevParticipantCount {
 
+	if participantCount > 1 {
 		for _, tts := range Config.Global.Software.TTS.Sound {
 			if tts.Action == "participants" {
 				if tts.Enabled {
@@ -285,26 +273,25 @@ func (b *Talkkonnect) ParticipantLEDUpdate(verbose bool) {
 				}
 			}
 		}
+	}
+	prevParticipantCount = len(b.Client.Self.Channel.Users)
 
-		prevParticipantCount = participantCount
-
-		if verbose {
-			log.Println("info: Current Channel ", b.Client.Self.Channel.Name, " has (", participantCount, ") participants")
-			b.ListUsers()
-			if Config.Global.Hardware.TargetBoard == "rpi" {
-				if LCDEnabled {
-					LcdText[0] = b.Name //b.Address
-					LcdText[1] = b.Client.Self.Channel.Name + " (" + strconv.Itoa(participantCount) + " Users)"
-					LcdDisplay(LcdText, LCDRSPin, LCDEPin, LCDD4Pin, LCDD5Pin, LCDD6Pin, LCDD7Pin, LCDInterfaceType, LCDI2CAddress)
-				}
-				if OLEDEnabled {
-					oledDisplay(false, 0, 1, b.Name) //b.Address
-					oledDisplay(false, 1, 1, b.Client.Self.Channel.Name+" ("+strconv.Itoa(participantCount)+" Users)")
-					oledDisplay(false, 6, 1, "Please Visit")
-					oledDisplay(false, 7, 1, "www.talkkonnect.com")
-				}
-
+	if verbose {
+		log.Println("info: Current Channel ", b.Client.Self.Channel.Name, " has (", participantCount, ") participants")
+		b.ListUsers()
+		if Config.Global.Hardware.TargetBoard == "rpi" {
+			if LCDEnabled {
+				LcdText[0] = b.Name //b.Address
+				LcdText[1] = "(" + strconv.Itoa(participantCount) + ")" + b.Client.Self.Channel.Name
+				LcdDisplay(LcdText, LCDRSPin, LCDEPin, LCDD4Pin, LCDD5Pin, LCDD6Pin, LCDD7Pin, LCDInterfaceType, LCDI2CAddress)
 			}
+			if OLEDEnabled {
+				oledDisplay(false, 0, 1, b.Name) //b.Address
+				oledDisplay(false, 1, 1, "("+strconv.Itoa(participantCount)+")"+b.Client.Self.Channel.Name)
+				oledDisplay(false, 6, 1, "Please Visit")
+				oledDisplay(false, 7, 1, "www.talkkonnect.com")
+			}
+
 		}
 	}
 
@@ -324,19 +311,19 @@ func (b *Talkkonnect) ParticipantLEDUpdate(verbose bool) {
 			}
 
 			log.Println("info: Channel ", b.Client.Self.Channel.Name, " has no other participants")
+		}
 
-			prevParticipantCount = 0
+		prevParticipantCount = len(b.Client.Self.Channel.Users)
 
-			if Config.Global.Hardware.TargetBoard == "rpi" {
-				GPIOOutPin("participants", "off")
-				if LCDEnabled {
-					LcdText = [4]string{b.Name, "Alone in " + b.Client.Self.Channel.Name, "", "nil"} //b.Address
-					LcdDisplay(LcdText, LCDRSPin, LCDEPin, LCDD4Pin, LCDD5Pin, LCDD6Pin, LCDD7Pin, LCDInterfaceType, LCDI2CAddress)
-				}
-				if OLEDEnabled {
-					oledDisplay(false, 0, 1, b.Name) //b.Address
-					oledDisplay(false, 1, 1, "Alone in "+b.Client.Self.Channel.Name)
-				}
+		if Config.Global.Hardware.TargetBoard == "rpi" {
+			GPIOOutPin("participants", "off")
+			if LCDEnabled && verbose {
+				LcdText = [4]string{b.Name, "(0)" + b.Client.Self.Channel.Name, "", "nil"} //b.Address
+				LcdDisplay(LcdText, LCDRSPin, LCDEPin, LCDD4Pin, LCDD5Pin, LCDD6Pin, LCDD7Pin, LCDInterfaceType, LCDI2CAddress)
+			}
+			if OLEDEnabled && verbose {
+				oledDisplay(false, 0, 1, b.Name) //b.Address
+				oledDisplay(false, 1, 1, "(0)"+b.Client.Self.Channel.Name)
 			}
 		}
 	}
@@ -354,135 +341,70 @@ func (b *Talkkonnect) ListUsers() {
 			log.Println(fmt.Sprintf("info: %d. User %#v is online. [%v]", item, usr.Name, usr.Comment))
 		}
 	}
-
 }
 
 func (b *Talkkonnect) ListChannels(verbose bool) {
+
 	if !(IsConnected) {
 		return
 	}
 
-	var records = int(len(b.Client.Channels))
-	channelsList := make([]ChannelsListStruct, len(b.Client.Channels))
+	ChannelsList = make([]ChannelsListStruct, len(b.Client.Channels))
 	counter := 0
+	ChannelIDs := []int{}
 
 	for _, ch := range b.Client.Channels {
-		channelsList[counter].chanID = ch.ID
-		channelsList[counter].chanName = ch.Name
-		channelsList[counter].chanParent = ch.Parent
-		channelsList[counter].chanUsers = len(ch.Users)
-		if verbose {
-			if ch.Permission() != nil {
-				if (*ch.Permission() & gumble.PermissionWrite) > 0 {
-					log.Printf("info: Channel %v Write Permissions\n", ch.Name)
-				}
-				if (*ch.Permission() & gumble.PermissionTraverse) > 0 {
-					log.Printf("info: Channel %v Transverse Permissions\n", ch.Name)
-				}
-				if (*ch.Permission() & gumble.PermissionEnter) > 0 {
-					log.Printf("info: Channel %v Enter Permissions\n", ch.Name)
-				}
-				if (*ch.Permission() & gumble.PermissionSpeak) > 0 {
-					log.Printf("info: Channel %v Speak Permissions\n", ch.Name)
-				}
-				if (*ch.Permission() & gumble.PermissionMuteDeafen) > 0 {
-					log.Printf("info: Channel %v MuteDefen Permissions\n", ch.Name)
-				}
-				if (*ch.Permission() & gumble.PermissionMove) > 0 {
-					log.Printf("info: Channel %v Move Permissions\n", ch.Name)
-				}
-				if (*ch.Permission() & gumble.PermissionMakeChannel) > 0 {
-					log.Printf("info: Channel %v Make Permissions\n", ch.Name)
-				}
-				if (*ch.Permission() & gumble.PermissionLinkChannel) > 0 {
-					log.Printf("info: Channel %v Link Permissions\n", ch.Name)
-				}
-				if (*ch.Permission() & gumble.PermissionWhisper) > 0 {
-					log.Printf("info: Channel %v Whisper Permissions\n", ch.Name)
-				}
-				if (*ch.Permission() & gumble.PermissionTextMessage) > 0 {
-					log.Printf("info: Channel %v Message Permissions\n", ch.Name)
-				}
-				if (*ch.Permission() & gumble.PermissionMakeTemporaryChannel) > 0 {
-					log.Printf("info: Channel %v Make Temp Channel Permissions\n", ch.Name)
-				}
-			} else {
-				log.Printf("info: Channel %v Nil Permissions\n", ch.Name)
-			}
-		}
-		if ch.ID > maxchannelid {
-			maxchannelid = ch.ID
-		}
-
+		ChannelIDs = append(ChannelIDs, int(ch.ID))
 		counter++
 	}
 
-	for i := 0; i < int(records); i++ {
-		if channelsList[i].chanID == 0 || channelsList[i].chanParent.ID == 0 {
-			if verbose {
-				log.Println(fmt.Sprintf("info: Parent -> ID=%2d | Name=%-12v (%v) Users | ", channelsList[i].chanID, channelsList[i].chanName, channelsList[i].chanUsers))
-			}
-		} else {
-			if verbose {
-				log.Println(fmt.Sprintf("info: Child  -> ID=%2d | Name=%-12v (%v) Users | PID =%2d | PName=%-12s", channelsList[i].chanID, channelsList[i].chanName, channelsList[i].chanUsers, channelsList[i].chanParent.ID, channelsList[i].chanParent.Name))
-			}
+	sort.Ints(ChannelIDs)
+
+	counter = 0
+	for _, cid := range ChannelIDs {
+		ChannelsList[counter].chanIndex = counter
+		ChannelsList[counter].chanID = cid
+		b.findChannelDetailsByID(uint32(cid), counter)
+		counter++
+	}
+	if verbose {
+		for i := 0; i < len(b.Client.Channels); i++ {
+			log.Println("debug: ", ChannelsList[i])
 		}
 	}
-
 }
 
 func (b *Talkkonnect) ChannelUp() {
 	if !(IsConnected) {
 		return
 	}
-
-	if prevChannelID == 0 {
-		prevChannelID = b.Client.Self.Channel.ID
-	}
-
+	ChannelAction = "channelup"
 	TTSEvent("channelup")
+	Channel := b.Client.Channels.Find()
+	currentIndex := b.findChannelIndex(b.Client.Self.Channel.ID)
+	NextIndex := currentIndex
 
-	prevButtonPress = "ChannelUp"
-
-	b.ListChannels(false)
-
-	// Set Upper Boundary
-	if b.Client.Self.Channel.ID == maxchannelid {
-		log.Println("alert: Max Channel Reached Rolling Back to Root Channel")
-		channel := b.Client.Channels.Find()
-		b.Client.Self.Move(channel)
-		prevChannelID = 0
-		return
+	if currentIndex+1 < len(b.Client.Channels) {
+		Channel = b.Client.Channels.Find(ChannelsList[currentIndex+1].chanName)
+		NextIndex = currentIndex + 1
 	}
 
-	// Implement Seek Up Avoiding any null channels
-	if prevChannelID < maxchannelid {
-
-		prevChannelID++
-
-		for i := prevChannelID; uint32(i) < maxchannelid+1; i++ {
-
-			channel := b.Client.Channels[i]
-
-			if channel != nil {
-				b.Client.Self.Move(channel)
-				//displaychannel
-				time.Sleep(500 * time.Millisecond)
-				if Config.Global.Hardware.TargetBoard == "rpi" {
-
-					if len(b.Client.Self.Channel.Users) == 1 {
-						LcdText[1] = "Alone in " + b.Client.Self.Channel.Name
-					} else {
-						LcdText[1] = b.Client.Self.Channel.Name + " (" + strconv.Itoa(len(b.Client.Self.Channel.Users)) + " Users)"
-					}
-
-					if LCDEnabled {
-						LcdDisplay(LcdText, LCDRSPin, LCDEPin, LCDD4Pin, LCDD5Pin, LCDD6Pin, LCDD7Pin, LCDInterfaceType, LCDI2CAddress)
-					}
-					if OLEDEnabled {
-						oledDisplay(false, 1, 1, LcdText[1])
-					}
-				}
+	if ChannelsList[NextIndex].chanenterPermissions {
+		if Channel != nil {
+			b.Client.Self.Move(Channel)
+		}
+	} else {
+		for i := NextIndex + 1; i <= len(b.Client.Channels); i++ {
+			//special handling for when highest channel has no token
+			if i == len(b.Client.Channels) {
+				Channel = b.Client.Channels.Find()
+				b.Client.Self.Move(Channel)
+				return
+			} else {
+				Channel = b.Client.Channels.Find(ChannelsList[i].chanName)
+			}
+			if ChannelsList[i].chanenterPermissions {
+				b.Client.Self.Move(Channel)
 				break
 			}
 		}
@@ -493,67 +415,37 @@ func (b *Talkkonnect) ChannelDown() {
 	if !(IsConnected) {
 		return
 	}
-
-	if prevChannelID == 0 {
-		prevChannelID = b.Client.Self.Channel.ID
-	}
-
+	ChannelAction = "channeldown"
 	TTSEvent("channeldown")
+	Channel := b.Client.Channels.Find(ChannelsList[len(b.Client.Channels)-1].chanName)
+	currentIndex := b.findChannelIndex(b.Client.Self.Channel.ID)
+	NextIndex := currentIndex
 
-	prevButtonPress = "ChannelDown"
-	b.ListChannels(false)
-
-	// Set Lower Boundary
-	if int(b.Client.Self.Channel.ID) == 0 {
-		log.Println("error: Can't Decrement Channel Root Channel Reached Rolling Back to Highest Channel ID")
-		b.Client.Self.Move(b.Client.Channels[maxchannelid])
-		prevChannelID = maxchannelid
-		if Config.Global.Hardware.TargetBoard == "rpi" {
-
-			if len(b.Client.Self.Channel.Users) == 1 {
-				LcdText[1] = "Alone in " + b.Client.Self.Channel.Name
-			} else {
-				LcdText[1] = b.Client.Self.Channel.Name + " (" + strconv.Itoa(len(b.Client.Self.Channel.Users)) + " Users)"
-			}
-
-			if LCDEnabled {
-				LcdDisplay(LcdText, LCDRSPin, LCDEPin, LCDD4Pin, LCDD5Pin, LCDD6Pin, LCDD7Pin, LCDInterfaceType, LCDI2CAddress)
-			}
-			if OLEDEnabled {
-				oledDisplay(false, 1, 1, LcdText[1])
-			}
-		}
-
-		return
+	if currentIndex == 0 {
+		//special handling of max channel without token
+		Channel = b.Client.Channels.Find(ChannelsList[len(b.Client.Channels)-1].chanName)
+		NextIndex = len(b.Client.Channels) - 1
 	}
 
-	// Implement Seek Down Avoiding any null channels
-	if int(prevChannelID) > 0 {
+	if currentIndex == 1 {
+		Channel = b.Client.Channels.Find()
+		NextIndex = currentIndex - 1
+	}
 
-		prevChannelID--
+	if currentIndex > 1 {
+		Channel = b.Client.Channels.Find(ChannelsList[currentIndex-1].chanName)
+		NextIndex = currentIndex - 1
+	}
 
-		for i := uint32(prevChannelID); uint32(i) < maxchannelid; i-- {
-			channel := b.Client.Channels[i]
-			if channel != nil {
-				b.Client.Self.Move(channel)
-				//displaychannel
-				time.Sleep(500 * time.Millisecond)
-				if Config.Global.Hardware.TargetBoard == "rpi" {
-
-					if len(b.Client.Self.Channel.Users) == 1 {
-						LcdText[1] = "Alone in " + b.Client.Self.Channel.Name
-					} else {
-						LcdText[1] = b.Client.Self.Channel.Name + " (" + strconv.Itoa(len(b.Client.Self.Channel.Users)) + " Users)"
-					}
-
-					if LCDEnabled {
-						LcdDisplay(LcdText, LCDRSPin, LCDEPin, LCDD4Pin, LCDD5Pin, LCDD6Pin, LCDD7Pin, LCDInterfaceType, LCDI2CAddress)
-					}
-					if OLEDEnabled {
-						oledDisplay(false, 1, 1, LcdText[1])
-					}
-				}
-
+	if ChannelsList[NextIndex].chanenterPermissions {
+		if Channel != nil {
+			b.Client.Self.Move(Channel)
+		}
+	} else {
+		for i := NextIndex - 1; i >= 0; i-- {
+			Channel = b.Client.Channels.Find(ChannelsList[i].chanName)
+			if ChannelsList[i].chanenterPermissions {
+				b.Client.Self.Move(Channel)
 				break
 			}
 		}
@@ -565,34 +457,7 @@ func (b *Talkkonnect) Scan() {
 		return
 	}
 
-	b.ListChannels(false)
-
-	if b.Client.Self.Channel.ID+1 > maxchannelid {
-		prevChannelID = 0
-		channel := b.Client.Channels[prevChannelID]
-		b.Client.Self.Move(channel)
-		return
-	}
-
-	if prevChannelID < maxchannelid {
-		prevChannelID++
-
-		for i := prevChannelID; uint32(i) < maxchannelid+1; i++ {
-			channel := b.Client.Channels[i]
-			if channel != nil {
-				b.Client.Self.Move(channel)
-				time.Sleep(1000 * time.Millisecond)
-				if len(b.Client.Self.Channel.Users) == 1 {
-					b.Scan()
-					break
-				} else {
-
-					log.Println("info: Found Someone Online Stopped Scan on Channel ", b.Client.Self.Channel.Name)
-					return
-				}
-			}
-		}
-	}
+	log.Println("alert: New Scan Not Implemented Yet")
 }
 
 func (b *Talkkonnect) SendMessage(textmessage string, PRecursive bool) {
@@ -748,11 +613,13 @@ func (b *Talkkonnect) VoiceTargetUserSet(TargetID uint32, TargetUser string) {
 		b.Client.VoiceTarget = vtarget
 		if TargetID > 0 {
 			log.Printf("debug: Added User %v to VT ID %v\n", TargetUser, TargetID)
+			b.sevenSegment("voicetarget", strconv.Itoa(int(TargetID)))
 			GPIOOutPin("voicetarget", "on")
 		} else {
 			//b.VoiceTarget.Clear()
 			GPIOOutPin("voicetarget", "off")
 			log.Println("debug: Cleared Voice Targets")
+			b.sevenSegment("voicetarget", strconv.Itoa(int(TargetID)))
 		}
 		b.Client.Send(vtarget)
 	} else {
@@ -787,6 +654,7 @@ func (b *Talkkonnect) VoiceTargetChannelSet(targetID uint32, targetChannelName s
 		b.Client.Send(vtarget)
 		log.Printf("debug: Shouting to Root Channel %v to VT ID %v with recursive %v links %v group %v\n", vChannel.Name, targetID, recursive, links, group)
 		GPIOOutPin("voicetarget", "off")
+		b.sevenSegment("voicetarget", strconv.Itoa(int(targetID)))
 		return
 	}
 
@@ -799,7 +667,30 @@ func (b *Talkkonnect) VoiceTargetChannelSet(targetID uint32, targetChannelName s
 	b.Client.VoiceTarget = vtarget
 	b.Client.Send(vtarget)
 	log.Printf("debug: Shouting to Child Channel %v to VT ID %v with recursive %v links %v group %v\n", vChannel.Name, targetID, recursive, links, group)
+	b.sevenSegment("voicetarget", strconv.Itoa(int(targetID)))
 	if targetID > 0 {
 		GPIOOutPin("voicetarget", "on")
+	}
+}
+
+func (b *Talkkonnect) findChannelIndex(currentChannelID uint32) int {
+	index := 0
+	for _, ch := range ChannelsList {
+		if ch.chanID == int(currentChannelID) {
+			return index
+		}
+		index++
+	}
+	return 0
+}
+
+func (b *Talkkonnect) findChannelDetailsByID(ChannelID uint32, index int) {
+	for _, ch := range b.Client.Channels {
+		if ch.ID == ChannelID {
+			ChannelsList[index].chanName = ch.Name
+			ChannelsList[index].chanParent = ch.Parent
+			ChannelsList[index].chanUsers = ch.Users
+			ChannelsList[index].chanenterPermissions = true
+		}
 	}
 }
