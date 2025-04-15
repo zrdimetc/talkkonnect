@@ -66,12 +66,40 @@ wget -nc https://go.dev/dl/$GOLANG_LATEST_STABLE_VERSION.linux-arm64.tar.gz $GOL
 tar -zxvf /usr/local/$GOLANG_LATEST_STABLE_VERSION.linux-arm64.tar.gz
 fi
 
-echo export PATH=$PATH:/usr/local/go/bin >>  ~/.bashrc
-echo export GOPATH=/home/talkkonnect/gocode >>  ~/.bashrc
-echo export GOBIN=/home/talkkonnect/bin >>  ~/.bashrc
-echo export GO111MODULE="auto" >>  ~/.bashrc
-echo "alias tk='cd /home/talkkonnect/gocode/src/github.com/talkkonnect/talkkonnect/'" >>  ~/.bashrc
+if grep -R "/usr/local/go/bin" ~/.bashrc > /dev/null
+then
+   echo "path to go/bin already defined"
+else
+echo export PATH=$PATH:/usr/local/go/bin >> ~/.bashrc
+fi
 
+if grep -R "GOPATH=/home/talkkonnect/gocode" ~/.bashrc > /dev/null
+then
+   echo "path to tk go code folder already defined"
+else
+echo export GOPATH=/home/talkkonnect/gocode >> ~/.bashrc
+fi
+
+if grep -R "GOBIN=/home/talkkonnect/bin" ~/.bashrc > /dev/null
+then
+    echo "path to tk go bin folder already defined"
+else
+echo export GOBIN=/home/talkkonnect/bin >> ~/.bashrc
+fi
+
+if grep -R 'GO111MODULE="auto"' ~/.bashrc > /dev/null
+then
+    echo "GO111MODULE auto defined"
+else
+echo export GO111MODULE="auto" >> ~/.bashrc
+fi
+
+if grep -R "alias tk='cd /home/talkkonnect/gocode/src/github.com/talkkonnect/talkkonnect/'" ~/.bashrc > /dev/null
+then
+    echo "alias cd cmd to tk files already defined"
+else
+echo "alias tk='cd /home/talkkonnect/gocode/src/github.com/talkkonnect/talkkonnect/'" >> ~/.bashrc
+fi
 
 ## Set up GOENVIRONMENT
 export PATH=$PATH:/usr/local/go/bin
