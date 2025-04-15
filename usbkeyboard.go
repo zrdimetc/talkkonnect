@@ -62,6 +62,12 @@ func (b *Talkkonnect) USBKeyboard() {
 
 				if ke.State == evdev.KeyDown {
 					keyPrevStateDown = true
+					if _, ok := USBKeyMap[rune(ke.Scancode)]; ok {
+						switch strings.ToLower(USBKeyMap[rune(ke.Scancode)].Command) {
+						case "soundinterfacepttkey":
+							b.TransmitStart()
+						}
+					}
 				}
 
 				// Functions that we allow Repeating Keys Defined Here
@@ -77,10 +83,20 @@ func (b *Talkkonnect) USBKeyboard() {
 							b.cmdChannelDown()
 						case "volumeup":
 							playIOMedia("usbvolup")
-							b.cmdVolumeUp()
+							b.cmdVolumeRXUp()
 						case "volumedown":
 							playIOMedia("usbvoldown")
-							b.cmdVolumeDown()
+							b.cmdVolumeRXDown()
+						case "volumetxup":
+							playIOMedia("usbvolup")
+							b.cmdVolumeTXUp()
+						case "volumetxdown":
+							playIOMedia("usbvoldown")
+							b.cmdVolumeTXDown()
+						case "pttkey":
+							if !b.IsTransmitting {
+								b.TransmitStart()
+							}
 						}
 					} else {
 						if ke.Scancode != uint16(Config.Global.Hardware.USBKeyboard.NumlockScanID) {
@@ -88,6 +104,14 @@ func (b *Talkkonnect) USBKeyboard() {
 						}
 					}
 					continue
+				}
+
+				if ke.State == evdev.KeyUp {
+					if strings.ToLower(USBKeyMap[rune(ke.Scancode)].Command) == "pttkey" {
+						if b.IsTransmitting {
+							b.TransmitStop(false)
+						}
+					}
 				}
 
 				//Key Up & Down One Shot
@@ -120,12 +144,24 @@ func (b *Talkkonnect) USBKeyboard() {
 						case "stream-toggle":
 							playIOMedia("usbstreamtoggle")
 							b.cmdPlayback()
-						case "volumeup":
+						case "currentrxvolume":
+							playIOMedia("usbcurrentrxvol")
+							b.cmdCurrentRXVolume()
+						case "volumerxup":
 							playIOMedia("usbvolup")
-							b.cmdVolumeUp()
-						case "volumedown":
+							b.cmdVolumeRXUp()
+						case "volumerxdown":
 							playIOMedia("usbvoldown")
-							b.cmdVolumeDown()
+							b.cmdVolumeRXDown()
+						case "currenttxvolume":
+							playIOMedia("usbcurrenttxvol")
+							b.cmdCurrentTXVolume()
+						case "volumetxup":
+							playIOMedia("usbvolup")
+							b.cmdVolumeTXUp()
+						case "volumetxdown":
+							playIOMedia("usbvoldown")
+							b.cmdVolumeTXDown()
 						case "setcomment":
 							if USBKeyMap[rune(ke.Scancode)].ParamName == "setcomment" {
 								log.Println("info: Set Commment ", USBKeyMap[rune(ke.Scancode)].ParamValue)
@@ -155,9 +191,26 @@ func (b *Talkkonnect) USBKeyboard() {
 								playIOMedia("usbmqttpubpayloadset")
 								MQTTPublish(USBKeyMap[rune(ke.Scancode)].ParamValue)
 							}
+						case "changechannel":
+							if USBKeyMap[rune(ke.Scancode)].ParamName == "channelname" {
+								playIOMedia("changechannel")
+								b.ChangeChannel(USBKeyMap[rune(ke.Scancode)].ParamValue)
+							}
 						case "repeatertoneplay":
 							playIOMedia("iorepeatertone")
 							b.cmdPlayRepeaterTone()
+						case "listentochannelon":
+							playIOMedia("usbstartlisten")
+							b.listeningToChannels("start")
+						case "listentochanneloff":
+							playIOMedia("usbstopliosten")
+							b.listeningToChannels("stop")
+						case "soundinterfacepttkey":
+							b.TransmitStop(false)
+						case "gpioinput":
+							GPIOInputPinControl(USBKeyMap[rune(ke.Scancode)].ParamName, USBKeyMap[rune(ke.Scancode)].ParamValue)
+						case "gpiooutput":
+							GPIOOutputPinControl(USBKeyMap[rune(ke.Scancode)].ParamName, USBKeyMap[rune(ke.Scancode)].ParamValue)
 						default:
 							log.Println("error: Command Not Defined ", strings.ToLower(USBKeyMap[rune(ke.Scancode)].Command))
 						}

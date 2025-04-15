@@ -42,7 +42,7 @@ import (
 	"github.com/talkkonnect/max7219"
 )
 
-//Variables for Input Buttons/Switches
+// Variables for Input Buttons/Switches
 var (
 	TxButtonUsed  bool
 	TxButton      gpio.Pin
@@ -78,6 +78,11 @@ var (
 	CommentButton      gpio.Pin
 	CommentButtonPin   uint
 	CommentButtonState uint
+
+	ListeningUsed        bool
+	ListeningButton      gpio.Pin
+	ListeningButtonPin   uint
+	ListeningButtonState uint
 
 	RotaryUsed bool
 	RotaryA    gpio.Pin
@@ -124,6 +129,56 @@ var (
 	RepeaterToneButton      gpio.Pin
 	RepeaterToneButtonPin   uint
 	RepeaterToneButtonState uint
+
+	MemoryChannelButton1Used  bool
+	MemoryChannelButton1      gpio.Pin
+	MemoryChannelButton1Pin   uint
+	MemoryChannelButton1State uint
+
+	MemoryChannelButton2Used  bool
+	MemoryChannelButton2      gpio.Pin
+	MemoryChannelButton2Pin   uint
+	MemoryChannelButton2State uint
+
+	MemoryChannelButton3Used  bool
+	MemoryChannelButton3      gpio.Pin
+	MemoryChannelButton3Pin   uint
+	MemoryChannelButton3State uint
+
+	MemoryChannelButton4Used  bool
+	MemoryChannelButton4      gpio.Pin
+	MemoryChannelButton4Pin   uint
+	MemoryChannelButton4State uint
+
+	ShutdownButtonUsed  bool
+	ShutdownButton      gpio.Pin
+	ShutdownButtonPin   uint
+	ShutdownButtonState uint
+
+	VoiceTargetButton1Used  bool
+	VoiceTargetButton1      gpio.Pin
+	VoiceTargetButton1Pin   uint
+	VoiceTargetButton1State uint
+
+	VoiceTargetButton2Used  bool
+	VoiceTargetButton2      gpio.Pin
+	VoiceTargetButton2Pin   uint
+	VoiceTargetButton2State uint
+
+	VoiceTargetButton3Used  bool
+	VoiceTargetButton3      gpio.Pin
+	VoiceTargetButton3Pin   uint
+	VoiceTargetButton3State uint
+
+	VoiceTargetButton4Used  bool
+	VoiceTargetButton4      gpio.Pin
+	VoiceTargetButton4Pin   uint
+	VoiceTargetButton4State uint
+
+	VoiceTargetButton5Used  bool
+	VoiceTargetButton5      gpio.Pin
+	VoiceTargetButton5Pin   uint
+	VoiceTargetButton5State uint
 )
 
 var D [8]*mcp23017.Device
@@ -224,6 +279,13 @@ func (b *Talkkonnect) initGPIO() {
 				CommentUsed = true
 				CommentButtonPin = io.PinNo
 			}
+			if io.Name == "listening" && io.PinNo > 0 {
+				log.Printf("debug: GPIO Setup Input Device %v Name %v PinNo %v", io.Device, io.Name, io.PinNo)
+				ListeningPinPullUp := rpio.Pin(io.PinNo)
+				ListeningPinPullUp.PullUp()
+				ListeningUsed = true
+				ListeningButtonPin = io.PinNo
+			}
 			if io.Name == "rotarya" && io.PinNo > 0 {
 				log.Printf("debug: GPIO Setup Input Device %v Name %v PinNo %v", io.Device, io.Name, io.PinNo)
 				RotaryAPinPullUp := rpio.Pin(io.PinNo)
@@ -287,6 +349,35 @@ func (b *Talkkonnect) initGPIO() {
 				NextServerButtonUsed = true
 				NextServerButtonPin = io.PinNo
 			}
+			if io.Name == "memorychannel1" && io.PinNo > 0 {
+				log.Printf("debug: GPIO Setup Input Device %v Name %v PinNo %v", io.Device, io.Name, io.PinNo)
+				MemoryChannelButton1PinPullUp := rpio.Pin(io.PinNo)
+				MemoryChannelButton1PinPullUp.PullUp()
+				MemoryChannelButton1Used = true
+				MemoryChannelButton1Pin = io.PinNo
+			}
+			if io.Name == "memorychannel2" && io.PinNo > 0 {
+				log.Printf("debug: GPIO Setup Input Device %v Name %v PinNo %v", io.Device, io.Name, io.PinNo)
+				MemoryChannelButton2PinPullUp := rpio.Pin(io.PinNo)
+				MemoryChannelButton2PinPullUp.PullUp()
+				MemoryChannelButton2Used = true
+				MemoryChannelButton2Pin = io.PinNo
+			}
+			if io.Name == "memorychannel3" && io.PinNo > 0 {
+				log.Printf("debug: GPIO Setup Input Device %v Name %v PinNo %v", io.Device, io.Name, io.PinNo)
+				MemoryChannelButton3PinPullUp := rpio.Pin(io.PinNo)
+				MemoryChannelButton3PinPullUp.PullUp()
+				MemoryChannelButton3Used = true
+				MemoryChannelButton3Pin = io.PinNo
+			}
+			if io.Name == "memorychannel4" && io.PinNo > 0 {
+				log.Printf("debug: GPIO Setup Input Device %v Name %v PinNo %v", io.Device, io.Name, io.PinNo)
+				MemoryChannelButton4PinPullUp := rpio.Pin(io.PinNo)
+				MemoryChannelButton4PinPullUp.PullUp()
+				MemoryChannelButton4Used = true
+				MemoryChannelButton4Pin = io.PinNo
+			}
+
 			if io.Name == "repeatertone" && io.PinNo > 0 {
 				log.Printf("debug: GPIO Setup Input Device %v Name %v PinNo %v", io.Device, io.Name, io.PinNo)
 				RepeaterToneButtonPinPullUp := rpio.Pin(io.PinNo)
@@ -294,10 +385,52 @@ func (b *Talkkonnect) initGPIO() {
 				RepeaterToneButtonUsed = true
 				RepeaterToneButtonPin = io.PinNo
 			}
+			if io.Name == "shutdown" && io.PinNo > 0 {
+				log.Printf("debug: GPIO Setup Input Device %v Name %v PinNo %v", io.Device, io.Name, io.PinNo)
+				ShutdownButtonPinPullUp := rpio.Pin(io.PinNo)
+				ShutdownButtonPinPullUp.PullUp()
+				ShutdownButtonUsed = true
+				ShutdownButtonPin = io.PinNo
+			}
+			if io.Name == "presetvoicetarget1" && io.PinNo > 0 {
+				log.Printf("debug: GPIO Setup Input Device %v Name %v PinNo %v", io.Device, io.Name, io.PinNo)
+				VoiceTargetButton1PinPullUp := rpio.Pin(io.PinNo)
+				VoiceTargetButton1PinPullUp.PullUp()
+				VoiceTargetButton1Used = true
+				VoiceTargetButton1Pin = io.PinNo
+			}
+			if io.Name == "presetvoicetarget2" && io.PinNo > 0 {
+				log.Printf("debug: GPIO Setup Input Device %v Name %v PinNo %v", io.Device, io.Name, io.PinNo)
+				VoiceTargetButton2PinPullUp := rpio.Pin(io.PinNo)
+				VoiceTargetButton2PinPullUp.PullUp()
+				VoiceTargetButton2Used = true
+				VoiceTargetButton2Pin = io.PinNo
+			}
+			if io.Name == "presetvoicetarget3" && io.PinNo > 0 {
+				log.Printf("debug: GPIO Setup Input Device %v Name %v PinNo %v", io.Device, io.Name, io.PinNo)
+				VoiceTargetButton3PinPullUp := rpio.Pin(io.PinNo)
+				VoiceTargetButton3PinPullUp.PullUp()
+				VoiceTargetButton3Used = true
+				VoiceTargetButton3Pin = io.PinNo
+			}
+			if io.Name == "presetvoicetarget4" && io.PinNo > 0 {
+				log.Printf("debug: GPIO Setup Input Device %v Name %v PinNo %v", io.Device, io.Name, io.PinNo)
+				VoiceTargetButton4PinPullUp := rpio.Pin(io.PinNo)
+				VoiceTargetButton4PinPullUp.PullUp()
+				VoiceTargetButton4Used = true
+				VoiceTargetButton4Pin = io.PinNo
+			}
+			if io.Name == "presetvoicetarget5" && io.PinNo > 0 {
+				log.Printf("debug: GPIO Setup Input Device %v Name %v PinNo %v", io.Device, io.Name, io.PinNo)
+				VoiceTargetButton5PinPullUp := rpio.Pin(io.PinNo)
+				VoiceTargetButton5PinPullUp.PullUp()
+				VoiceTargetButton5Used = true
+				VoiceTargetButton5Pin = io.PinNo
+			}
 		}
 	}
 
-	if TxButtonUsed || TxToggleUsed || UpButtonUsed || DownButtonUsed || PanicUsed || StreamToggleUsed || CommentUsed || RotaryUsed || RotaryButtonUsed || VolUpButtonUsed || VolDownButtonUsed || TrackingUsed || MQTT0ButtonUsed || MQTT1ButtonUsed || NextServerButtonUsed || RepeaterToneButtonUsed {
+	if TxButtonUsed || TxToggleUsed || UpButtonUsed || DownButtonUsed || PanicUsed || StreamToggleUsed || CommentUsed || RotaryUsed || RotaryButtonUsed || VolUpButtonUsed || VolDownButtonUsed || TrackingUsed || MQTT0ButtonUsed || MQTT1ButtonUsed || NextServerButtonUsed || MemoryChannelButton1Used || MemoryChannelButton2Used || MemoryChannelButton3Used || MemoryChannelButton4Used || RepeaterToneButtonUsed || ListeningUsed || ShutdownButtonUsed || VoiceTargetButton1Used || VoiceTargetButton2Used || VoiceTargetButton3Used || VoiceTargetButton4Used || VoiceTargetButton5Used {
 		rpio.Close()
 	}
 
@@ -305,7 +438,7 @@ func (b *Talkkonnect) initGPIO() {
 		TxButton = gpio.NewInput(TxButtonPin)
 		go func() {
 			for {
-				if IsConnected {
+				if IsConnected && TxButtonUsed {
 					time.Sleep(150 * time.Millisecond)
 					currentState, err := TxButton.Read()
 					if currentState != TxButtonState && err == nil {
@@ -358,7 +491,7 @@ func (b *Talkkonnect) initGPIO() {
 		go func() {
 			var prevState uint = 1
 			for {
-				if IsConnected {
+				if IsConnected && TxToggleUsed {
 					currentState, err := TxToggle.Read()
 					time.Sleep(150 * time.Millisecond)
 					if err != nil {
@@ -413,7 +546,7 @@ func (b *Talkkonnect) initGPIO() {
 		UpButton = gpio.NewInput(UpButtonPin)
 		go func() {
 			for {
-				if IsConnected {
+				if IsConnected && UpButtonUsed {
 					currentState, err := UpButton.Read()
 					time.Sleep(150 * time.Millisecond)
 					if currentState != UpButtonState && err == nil {
@@ -438,7 +571,7 @@ func (b *Talkkonnect) initGPIO() {
 		DownButton = gpio.NewInput(DownButtonPin)
 		go func() {
 			for {
-				if IsConnected {
+				if IsConnected && DownButtonUsed {
 
 					currentState, err := DownButton.Read()
 					time.Sleep(150 * time.Millisecond)
@@ -466,7 +599,7 @@ func (b *Talkkonnect) initGPIO() {
 		PanicButton = gpio.NewInput(PanicButtonPin)
 		go func() {
 			for {
-				if IsConnected {
+				if IsConnected && PanicUsed {
 					currentState, err := PanicButton.Read()
 					time.Sleep(150 * time.Millisecond)
 					if currentState != PanicButtonState && err == nil {
@@ -492,7 +625,7 @@ func (b *Talkkonnect) initGPIO() {
 		CommentButton = gpio.NewInput(CommentButtonPin)
 		go func() {
 			for {
-				if IsConnected {
+				if IsConnected && CommentUsed {
 					currentState, err := CommentButton.Read()
 					time.Sleep(150 * time.Millisecond)
 					if currentState != CommentButtonState && err == nil {
@@ -516,11 +649,38 @@ func (b *Talkkonnect) initGPIO() {
 
 	}
 
+	if ListeningUsed {
+		ListeningButton = gpio.NewInput(ListeningButtonPin)
+		go func() {
+			for {
+				if IsConnected && ListeningUsed {
+					currentState, err := ListeningButton.Read()
+					time.Sleep(150 * time.Millisecond)
+					if currentState != ListeningButtonState && err == nil {
+						ListeningButtonState = currentState
+						if ListeningButtonState == 1 {
+							playIOMedia("iolisteningstop")
+							log.Println("debug: Listening Button State 1 Listening Stop")
+							b.listeningToChannels("stop")
+						} else {
+							playIOMedia("iolisteningstart")
+							b.listeningToChannels("start")
+							log.Println("debug: Listening Button State 0 Listening Start")
+						}
+					}
+				} else {
+					time.Sleep(1 * time.Second)
+				}
+			}
+		}()
+
+	}
+
 	if StreamToggleUsed {
 		StreamButton = gpio.NewInput(StreamButtonPin)
 		go func() {
 			for {
-				if IsConnected {
+				if IsConnected && StreamToggleUsed {
 					currentState, err := StreamButton.Read()
 					time.Sleep(150 * time.Millisecond)
 					if currentState != StreamButtonState && err == nil {
@@ -550,7 +710,7 @@ func (b *Talkkonnect) initGPIO() {
 			var lastStateA uint
 			var lastStateB uint
 			for {
-				if IsConnected {
+				if IsConnected && RotaryUsed {
 					currentStateA, _ = RotaryA.Read()
 					currentStateB, _ = RotaryB.Read()
 					time.Sleep(2 * time.Millisecond)
@@ -611,7 +771,7 @@ func (b *Talkkonnect) initGPIO() {
 		RotaryButton = gpio.NewInput(RotaryButtonPin)
 		go func() {
 			for {
-				if IsConnected {
+				if IsConnected && RotaryButtonUsed {
 					currentState, err := RotaryButton.Read()
 					time.Sleep(150 * time.Millisecond)
 
@@ -637,7 +797,7 @@ func (b *Talkkonnect) initGPIO() {
 		VolUpButton = gpio.NewInput(VolUpButtonPin)
 		go func() {
 			for {
-				if IsConnected {
+				if IsConnected && VolUpButtonUsed {
 					currentState, err := VolUpButton.Read()
 					time.Sleep(150 * time.Millisecond)
 
@@ -649,7 +809,7 @@ func (b *Talkkonnect) initGPIO() {
 						} else {
 							log.Println("debug: Vol UP Button is pressed")
 							playIOMedia("iovolup")
-							b.cmdVolumeUp()
+							b.cmdVolumeRXUp()
 						}
 					}
 				} else {
@@ -663,7 +823,7 @@ func (b *Talkkonnect) initGPIO() {
 		VolDownButton = gpio.NewInput(VolDownButtonPin)
 		go func() {
 			for {
-				if IsConnected {
+				if IsConnected && VolDownButtonUsed {
 					currentState, err := VolDownButton.Read()
 					time.Sleep(150 * time.Millisecond)
 					if currentState != VolDownButtonState && err == nil {
@@ -673,7 +833,7 @@ func (b *Talkkonnect) initGPIO() {
 						} else {
 							log.Println("debug: Vol Down Button is pressed")
 							playIOMedia("iovoldown")
-							b.cmdVolumeDown()
+							b.cmdVolumeRXDown()
 						}
 					}
 				} else {
@@ -687,7 +847,7 @@ func (b *Talkkonnect) initGPIO() {
 		TrackingButton = gpio.NewInput(TrackingButtonPin)
 		go func() {
 			for {
-				if IsConnected {
+				if IsConnected && TrackingUsed {
 					currentState, err := TrackingButton.Read()
 					time.Sleep(150 * time.Millisecond)
 					if currentState != TrackingButtonState && err == nil {
@@ -714,7 +874,7 @@ func (b *Talkkonnect) initGPIO() {
 		MQTT0Button = gpio.NewInput(MQTT0ButtonPin)
 		go func() {
 			for {
-				if IsConnected {
+				if IsConnected && MQTT0ButtonUsed {
 					currentState, err := MQTT0Button.Read()
 					time.Sleep(150 * time.Millisecond)
 					if currentState != MQTT0ButtonState && err == nil {
@@ -742,7 +902,7 @@ func (b *Talkkonnect) initGPIO() {
 		MQTT1Button = gpio.NewInput(MQTT1ButtonPin)
 		go func() {
 			for {
-				if IsConnected {
+				if IsConnected && MQTT1ButtonUsed {
 					currentState, err := MQTT1Button.Read()
 					time.Sleep(150 * time.Millisecond)
 					if currentState != MQTT1ButtonState && err == nil {
@@ -770,7 +930,7 @@ func (b *Talkkonnect) initGPIO() {
 		NextServerButton = gpio.NewInput(NextServerButtonPin)
 		go func() {
 			for {
-				if IsConnected {
+				if IsConnected && NextServerButtonUsed {
 					currentState, err := NextServerButton.Read()
 					time.Sleep(150 * time.Millisecond)
 					if currentState != NextServerButtonState && err == nil {
@@ -791,11 +951,290 @@ func (b *Talkkonnect) initGPIO() {
 		}()
 	}
 
+	if MemoryChannelButton1Used {
+		MemoryChannelButton1 = gpio.NewInput(MemoryChannelButton1Pin)
+		go func() {
+			for {
+				if IsConnected && MemoryChannelButton1Used {
+					currentState, err := MemoryChannelButton1.Read()
+					time.Sleep(150 * time.Millisecond)
+					if currentState != MemoryChannelButton1State && err == nil {
+						MemoryChannelButton1State = currentState
+						if MemoryChannelButton1State == 1 {
+							log.Println("debug: MemoryChannelButton1 Button is released")
+						} else {
+							log.Println("debug: MemoryChannelButton1 Button is pressed")
+							playIOMedia("memorychannel")
+							v, found := GPIOMemoryMap["memorychannel1"]
+							if found {
+								b.ChangeChannel(v.ChannelName)
+							} else {
+								log.Printf("error: Channel %v Not Found Channel Change Failed\n", v)
+							}
+
+							time.Sleep(150 * time.Millisecond)
+						}
+					}
+				} else {
+					time.Sleep(1 * time.Second)
+				}
+			}
+		}()
+	}
+
+	if MemoryChannelButton2Used {
+		MemoryChannelButton2 = gpio.NewInput(MemoryChannelButton2Pin)
+		go func() {
+			for {
+				if IsConnected && MemoryChannelButton2Used {
+					currentState, err := MemoryChannelButton2.Read()
+					time.Sleep(150 * time.Millisecond)
+					if currentState != MemoryChannelButton2State && err == nil {
+						MemoryChannelButton2State = currentState
+						if MemoryChannelButton2State == 1 {
+							log.Println("debug: MemoryChannelButton2 Button is released")
+						} else {
+							log.Println("debug: MemoryChannelButton2 Button is pressed")
+							playIOMedia("memorychannel")
+							v, found := GPIOMemoryMap["memorychannel2"]
+							if found {
+								b.ChangeChannel(v.ChannelName)
+							} else {
+								log.Printf("error: Channel %v Not Found Channel Change Failed\n", v)
+							}
+
+							time.Sleep(150 * time.Millisecond)
+						}
+					}
+				} else {
+					time.Sleep(1 * time.Second)
+				}
+			}
+		}()
+	}
+
+	if MemoryChannelButton3Used {
+		MemoryChannelButton3 = gpio.NewInput(MemoryChannelButton3Pin)
+		go func() {
+			for {
+				if IsConnected && MemoryChannelButton3Used {
+					currentState, err := MemoryChannelButton3.Read()
+					time.Sleep(150 * time.Millisecond)
+					if currentState != MemoryChannelButton3State && err == nil {
+						MemoryChannelButton3State = currentState
+						if MemoryChannelButton3State == 1 {
+							log.Println("debug: MemoryChannelButton3 Button is released")
+						} else {
+							log.Println("debug: MemoryChannelButton3 Button is pressed")
+							playIOMedia("memorychannel")
+							v, found := GPIOMemoryMap["memorychannel3"]
+							if found {
+								b.ChangeChannel(v.ChannelName)
+							} else {
+								log.Printf("error: Channel %v Not Found Channel Change Failed\n", v)
+							}
+
+							time.Sleep(150 * time.Millisecond)
+						}
+					}
+				} else {
+					time.Sleep(1 * time.Second)
+				}
+			}
+		}()
+	}
+
+	if MemoryChannelButton4Used {
+		MemoryChannelButton4 = gpio.NewInput(MemoryChannelButton4Pin)
+		go func() {
+			for {
+				if IsConnected && MemoryChannelButton4Used {
+					currentState, err := MemoryChannelButton4.Read()
+					time.Sleep(150 * time.Millisecond)
+					if currentState != MemoryChannelButton4State && err == nil {
+						MemoryChannelButton4State = currentState
+						if MemoryChannelButton4State == 1 {
+							log.Println("debug: MemoryChannelButton4 Button is released")
+						} else {
+							log.Println("debug: MemoryChannelButton4 Button is pressed")
+							playIOMedia("memorychannel")
+							v, found := GPIOMemoryMap["memorychannel4"]
+							if found {
+								b.ChangeChannel(v.ChannelName)
+							} else {
+								log.Printf("error: Channel %v Not Found Channel Change Failed\n", v)
+							}
+
+							time.Sleep(150 * time.Millisecond)
+						}
+					}
+				} else {
+					time.Sleep(1 * time.Second)
+				}
+			}
+		}()
+	}
+
+	if VoiceTargetButton1Used {
+		VoiceTargetButton1 = gpio.NewInput(VoiceTargetButton1Pin)
+		go func() {
+			for {
+				if IsConnected && VoiceTargetButton1Used {
+					currentState, err := VoiceTargetButton1.Read()
+					time.Sleep(150 * time.Millisecond)
+					if currentState != VoiceTargetButton1State && err == nil {
+						VoiceTargetButton1State = currentState
+						if VoiceTargetButton1State == 1 {
+							log.Println("debug: VoiceTargetButton1 Button is released")
+						} else {
+							log.Println("debug: VoicetargetButton1 Button is pressed")
+							playIOMedia("voicetarget1")
+							vtid, found := GPIOVoiceTargetMap["presetvoicetarget1"]
+							if found {
+								b.cmdSendVoiceTargets(vtid.ID)
+								log.Printf("info: Setting Voice Target to ID %v\n", vtid.ID)
+							} else {
+								log.Printf("error: VoicetargetButton1 Mapped to ID %v Not Found VoiceTarget Set Failed\n", vtid.ID)
+							}
+							time.Sleep(150 * time.Millisecond)
+						}
+					}
+				} else {
+					time.Sleep(1 * time.Second)
+				}
+			}
+		}()
+	}
+
+	if VoiceTargetButton2Used {
+		VoiceTargetButton2 = gpio.NewInput(VoiceTargetButton2Pin)
+		go func() {
+			for {
+				if IsConnected && VoiceTargetButton2Used {
+					currentState, err := VoiceTargetButton2.Read()
+					time.Sleep(150 * time.Millisecond)
+					if currentState != VoiceTargetButton2State && err == nil {
+						VoiceTargetButton2State = currentState
+						if VoiceTargetButton2State == 1 {
+							log.Println("debug: VoiceTargetButton2 Button is released")
+						} else {
+							log.Println("debug: VoicetargetButton2 Button is pressed")
+							playIOMedia("voicetarget2")
+							vtid, found := GPIOVoiceTargetMap["presetvoicetarget2"]
+							if found {
+								b.cmdSendVoiceTargets(vtid.ID)
+								log.Printf("info: Setting Voice Target to ID %v\n", vtid.ID)
+							} else {
+								log.Printf("error: VoicetargetButton2 Mapped to ID %v Not Found VoiceTarget Set Failed\n", vtid.ID)
+							}
+							time.Sleep(150 * time.Millisecond)
+						}
+					}
+				} else {
+					time.Sleep(1 * time.Second)
+				}
+			}
+		}()
+	}
+
+	if VoiceTargetButton3Used {
+		VoiceTargetButton3 = gpio.NewInput(VoiceTargetButton3Pin)
+		go func() {
+			for {
+				if IsConnected && VoiceTargetButton3Used {
+					currentState, err := VoiceTargetButton3.Read()
+					time.Sleep(150 * time.Millisecond)
+					if currentState != VoiceTargetButton3State && err == nil {
+						VoiceTargetButton3State = currentState
+						if VoiceTargetButton3State == 1 {
+							log.Println("debug: VoiceTargetButton3 Button is released")
+						} else {
+							log.Println("debug: VoicetargetButton3 Button is pressed")
+							playIOMedia("voicetarget3")
+							vtid, found := GPIOVoiceTargetMap["presetvoicetarget3"]
+							if found {
+								b.cmdSendVoiceTargets(vtid.ID)
+								log.Printf("info: Setting Voice Target to ID %v\n", vtid.ID)
+							} else {
+								log.Printf("error: VoicetargetButton3 Mapped to ID %v Not Found VoiceTarget Set Failed\n", vtid.ID)
+							}
+							time.Sleep(150 * time.Millisecond)
+						}
+					}
+				} else {
+					time.Sleep(1 * time.Second)
+				}
+			}
+		}()
+	}
+
+	if VoiceTargetButton4Used {
+		VoiceTargetButton4 = gpio.NewInput(VoiceTargetButton4Pin)
+		go func() {
+			for {
+				if IsConnected && VoiceTargetButton4Used {
+					currentState, err := VoiceTargetButton4.Read()
+					time.Sleep(150 * time.Millisecond)
+					if currentState != VoiceTargetButton4State && err == nil {
+						VoiceTargetButton4State = currentState
+						if VoiceTargetButton4State == 1 {
+							log.Println("debug: VoiceTargetButton4 Button is released")
+						} else {
+							log.Println("debug: VoicetargetButton4 Button is pressed")
+							playIOMedia("voicetarget4")
+							vtid, found := GPIOVoiceTargetMap["presetvoicetarget4"]
+							if found {
+								b.cmdSendVoiceTargets(vtid.ID)
+								log.Printf("info: Setting Voice Target to ID %v\n", vtid.ID)
+							} else {
+								log.Printf("error: VoicetargetButton4 Mapped to ID %v Not Found VoiceTarget Set Failed\n", vtid.ID)
+							}
+							time.Sleep(150 * time.Millisecond)
+						}
+					}
+				} else {
+					time.Sleep(1 * time.Second)
+				}
+			}
+		}()
+	}
+
+	if VoiceTargetButton5Used {
+		VoiceTargetButton5 = gpio.NewInput(VoiceTargetButton5Pin)
+		go func() {
+			for {
+				if IsConnected && VoiceTargetButton5Used {
+					currentState, err := VoiceTargetButton5.Read()
+					time.Sleep(150 * time.Millisecond)
+					if currentState != VoiceTargetButton5State && err == nil {
+						VoiceTargetButton5State = currentState
+						if VoiceTargetButton5State == 1 {
+							log.Println("debug: VoiceTargetButton5 Button is released")
+						} else {
+							log.Println("debug: VoicetargetButton5 Button is pressed")
+							playIOMedia("voicetarget5")
+							vtid, found := GPIOVoiceTargetMap["presetvoicetarget5"]
+							if found {
+								b.cmdSendVoiceTargets(vtid.ID)
+								log.Printf("info: Setting Voice Target to ID %v\n", vtid.ID)
+							} else {
+								log.Printf("error: VoicetargetButton5 Mapped to ID %v Not Found VoiceTarget Set Failed\n", vtid.ID)
+							}
+							time.Sleep(150 * time.Millisecond)
+						}
+					}
+				} else {
+					time.Sleep(1 * time.Second)
+				}
+			}
+		}()
+	}
+
 	if RepeaterToneButtonUsed {
 		RepeaterToneButton = gpio.NewInput(RepeaterToneButtonPin)
 		go func() {
 			for {
-				if IsConnected {
+				if IsConnected && RepeaterToneButtonUsed {
 					currentState, err := RepeaterToneButton.Read()
 					time.Sleep(150 * time.Millisecond)
 					if currentState != RepeaterToneButtonState && err == nil {
@@ -807,6 +1246,35 @@ func (b *Talkkonnect) initGPIO() {
 							log.Println("debug: Repeater Tone Button is pressed")
 							playIOMedia("iorepeatertone")
 							b.cmdPlayRepeaterTone()
+							time.Sleep(150 * time.Millisecond)
+						}
+					}
+				} else {
+					time.Sleep(1 * time.Second)
+				}
+			}
+		}()
+	}
+
+	if ShutdownButtonUsed {
+		ShutdownButton = gpio.NewInput(ShutdownButtonPin)
+		go func() {
+			for {
+				if IsConnected && ShutdownButtonUsed {
+					currentState, err := ShutdownButton.Read()
+					time.Sleep(150 * time.Millisecond)
+					if currentState != ShutdownButtonState && err == nil {
+						ShutdownButtonState = currentState
+						if ShutdownButtonState == 1 {
+							log.Println("debug: Shutdown is released")
+						} else {
+							log.Println("debug: Shutdown Button is pressed")
+							playIOMedia("shutdown")
+							duration := time.Since(StartTime)
+							log.Printf("info: Talkkonnect Now Running For %v \n", secondsToHuman(int(duration.Seconds())))
+							b.sevenSegment("bye", "")
+							TTSEvent("quittalkkonnect")
+							CleanUp(true)
 							time.Sleep(150 * time.Millisecond)
 						}
 					}
@@ -991,60 +1459,62 @@ func GPIOOutAll(name string, command string) {
 	}
 }
 
-func MyLedStripGPIOOffAll() {
-	if Config.Global.Hardware.LedStripEnabled {
-		log.Println("debug: Turning Off All LEDStrip LEDs")
-		MyLedStrip.ledCtrl(SOnlineLED, OffCol)
-		MyLedStrip.ledCtrl(SVoiceActivityLED, OffCol)
-		MyLedStrip.ledCtrl(STransmitLED, OffCol)
+/*
+	func MyLedStripGPIOOffAll() {
+		if Config.Global.Hardware.LedStripEnabled {
+			log.Println("debug: Turning Off All LEDStrip LEDs")
+			MyLedStrip.ledCtrl(SOnlineLED, OffCol)
+			MyLedStrip.ledCtrl(SVoiceActivityLED, OffCol)
+			MyLedStrip.ledCtrl(STransmitLED, OffCol)
+		}
 	}
-}
 
-func MyLedStripOnlineLEDOn() {
-	if Config.Global.Hardware.LedStripEnabled {
-		log.Println("debug: Turning On LEDStrip Online LED")
-		MyLedStrip.ledCtrl(SOnlineLED, OnlineCol)
+	func MyLedStripOnlineLEDOn() {
+		if Config.Global.Hardware.LedStripEnabled {
+			log.Println("debug: Turning On LEDStrip Online LED")
+			MyLedStrip.ledCtrl(SOnlineLED, OnlineCol)
+		}
 	}
-}
 
-func MyLedStripOnlineLEDOff() {
-	if Config.Global.Hardware.LedStripEnabled {
-		log.Println("debug: Turning Off LEDStrip Online LED")
-		MyLedStrip.ledCtrl(SOnlineLED, OffCol)
+	func MyLedStripOnlineLEDOff() {
+		if Config.Global.Hardware.LedStripEnabled {
+			log.Println("debug: Turning Off LEDStrip Online LED")
+			MyLedStrip.ledCtrl(SOnlineLED, OffCol)
 
+		}
 	}
-}
 
-func MyLedStripVoiceActivityLEDOn() {
-	if Config.Global.Hardware.LedStripEnabled {
-		log.Println("debug: Turning On LEDStrip VoiceActivity LED")
-		MyLedStrip.ledCtrl(SVoiceActivityLED, VoiceActivityCol)
+	func MyLedStripVoiceActivityLEDOn() {
+		if Config.Global.Hardware.LedStripEnabled {
+			log.Println("debug: Turning On LEDStrip VoiceActivity LED")
+			MyLedStrip.ledCtrl(SVoiceActivityLED, VoiceActivityCol)
+		}
 	}
-}
 
-func MyLedStripVoiceActivityLEDOff() {
-	if Config.Global.Hardware.LedStripEnabled {
-		log.Println("debug: Turning Off LEDStrip VoiceActivity LED")
-		MyLedStrip.ledCtrl(SVoiceActivityLED, OffCol)
+	func MyLedStripVoiceActivityLEDOff() {
+		if Config.Global.Hardware.LedStripEnabled {
+			log.Println("debug: Turning Off LEDStrip VoiceActivity LED")
+			MyLedStrip.ledCtrl(SVoiceActivityLED, OffCol)
 
+		}
 	}
-}
 
-func MyLedStripTransmitLEDOn() {
-	if Config.Global.Hardware.LedStripEnabled {
-		log.Println("debug: Turning On LEDStrip Transmit LED")
-		MyLedStrip.ledCtrl(STransmitLED, TransmitCol)
+	func MyLedStripTransmitLEDOn() {
+		if Config.Global.Hardware.LedStripEnabled {
+			log.Println("debug: Turning On LEDStrip Transmit LED")
+			MyLedStrip.ledCtrl(STransmitLED, TransmitCol)
 
+		}
 	}
-}
-func MyLedStripTransmitLEDOff() {
-	if Config.Global.Hardware.LedStripEnabled {
-		log.Println("debug: Turning Off LEDStrip Transmit LED")
-		MyLedStrip.ledCtrl(STransmitLED, OffCol)
 
+	func MyLedStripTransmitLEDOff() {
+		if Config.Global.Hardware.LedStripEnabled {
+			log.Println("debug: Turning Off LEDStrip Transmit LED")
+			MyLedStrip.ledCtrl(STransmitLED, OffCol)
+
+		}
 	}
-}
-
+*/
 func Max7219(max7219Cascaded int, spiBus int, spiDevice int, brightness byte, toDisplay string) {
 	if Config.Global.Hardware.IO.Max7219.Enabled {
 		mtx := max7219.NewMatrix(max7219Cascaded)
@@ -1069,7 +1539,7 @@ func (b *Talkkonnect) rotaryAction(direction string) {
 				}
 			case "localvolume":
 				if b.findEnabledRotaryEncoderFunction("localvolume") {
-					b.cmdVolumeUp()
+					b.cmdVolumeRXUp()
 				}
 			case "radiochannel":
 				if b.findEnabledRotaryEncoderFunction("radiochannel") {
@@ -1094,7 +1564,7 @@ func (b *Talkkonnect) rotaryAction(direction string) {
 				}
 			case "localvolume":
 				if b.findEnabledRotaryEncoderFunction("localvolume") {
-					b.cmdVolumeDown()
+					b.cmdVolumeRXDown()
 				}
 			case "radiochannel":
 				if b.findEnabledRotaryEncoderFunction("radiochannel") {
@@ -1121,6 +1591,7 @@ func createEnabledRotaryEncoderFunctions() {
 	}
 }
 
+// here
 func (b *Talkkonnect) nextEnabledRotaryEncoderFunction() {
 	if len(RotaryFunctions) > RotaryFunction.Item+1 {
 		RotaryFunction.Item++
@@ -1128,15 +1599,27 @@ func (b *Talkkonnect) nextEnabledRotaryEncoderFunction() {
 		log.Printf("info: Current Rotary Item %v Function %v\n", RotaryFunction.Item, RotaryFunction.Function)
 		if RotaryFunction.Function == "mumblechannel" {
 			b.sevenSegment("mumblechannel", strconv.Itoa(int(b.Client.Self.Channel.ID)))
+			if OLEDEnabled {
+				oledDisplay(false, 6, OLEDStartColumn, "[Channel Mode]      ")
+			}
 		}
 		if RotaryFunction.Function == "localvolume" {
-			b.cmdCurrentVolume()
+			b.cmdCurrentRXVolume()
+			if OLEDEnabled {
+				oledDisplay(false, 6, OLEDStartColumn, "[Volume Mode]       ")
+			}
 		}
 		if RotaryFunction.Function == "radiochannel" {
 			b.sevenSegment("radiochannel", "")
+			if OLEDEnabled {
+				oledDisplay(false, 6, OLEDStartColumn, "[Radio Channel Mode]")
+			}
 		}
 		if RotaryFunction.Function == "voicetarget" {
 			b.sevenSegment("voicetarget", "")
+			if OLEDEnabled {
+				oledDisplay(false, 6, OLEDStartColumn, "[Voice Target Mode] ")
+			}
 		}
 		return
 	}
@@ -1147,15 +1630,27 @@ func (b *Talkkonnect) nextEnabledRotaryEncoderFunction() {
 		log.Printf("info: Current Rotary Item %v Function %v\n", RotaryFunction.Item, RotaryFunction.Function)
 		if RotaryFunction.Function == "mumblechannel" {
 			b.sevenSegment("mumblechannel", strconv.Itoa(int(b.Client.Self.Channel.ID)))
+			if OLEDEnabled {
+				oledDisplay(false, 6, OLEDStartColumn, "[Channel Mode]      ")
+			}
 		}
 		if RotaryFunction.Function == "localvolume" {
-			b.cmdCurrentVolume()
+			b.cmdCurrentRXVolume()
+			if OLEDEnabled {
+				oledDisplay(false, 6, OLEDStartColumn, "[Volume Mode]       ")
+			}
 		}
 		if RotaryFunction.Function == "radiochannel" {
 			b.sevenSegment("radiochannel", "")
+			if OLEDEnabled {
+				oledDisplay(false, 6, OLEDStartColumn, "[Radio Channel Mode]")
+			}
 		}
 		if RotaryFunction.Function == "voicetarget" {
 			b.sevenSegment("voicetarget", "")
+			if OLEDEnabled {
+				oledDisplay(false, 6, OLEDStartColumn, "[Voice Target Mode] ")
+			}
 		}
 		return
 	}
@@ -1168,4 +1663,333 @@ func (b *Talkkonnect) findEnabledRotaryEncoderFunction(findFunction string) bool
 		}
 	}
 	return false
+}
+
+func GPIOOutputPinControl(name string, command string) {
+	if Config.Global.Hardware.TargetBoard != "rpi" {
+		return
+	}
+	for i, io := range Config.Global.Hardware.IO.Pins.Pin {
+		if io.Direction == "output" && io.Name == name {
+			switch command {
+			case "off":
+				Config.Global.Hardware.IO.Pins.Pin[i].Enabled = false
+			case "on":
+				Config.Global.Hardware.IO.Pins.Pin[i].Enabled = true
+			case "toggle":
+				Config.Global.Hardware.IO.Pins.Pin[i].Enabled = !Config.Global.Hardware.IO.Pins.Pin[i].Enabled
+			}
+			log.Printf("GPIO Enabled For Pin %v is Now Set To %v\n", io.Name, Config.Global.Hardware.IO.Pins.Pin[i].Enabled)
+		}
+	}
+}
+
+func GPIOInputPinControl(name string, command string) {
+	if Config.Global.Hardware.TargetBoard != "rpi" {
+		return
+	}
+
+	for _, io := range Config.Global.Hardware.IO.Pins.Pin {
+		if io.Direction == "input" {
+			if io.Name == "txptt" && io.Name == name {
+				switch command {
+				case "off":
+					TxButtonUsed = false
+				case "on":
+					TxButtonUsed = true
+				case "toggle":
+					TxButtonUsed = !TxButtonUsed
+				}
+				log.Printf("%v Enabled is Now Set To %v\n", io.Name, TxButtonUsed)
+			}
+			if io.Name == "txtoggle" && io.Name == name {
+				switch command {
+				case "off":
+					TxToggleUsed = false
+				case "on":
+					TxToggleUsed = true
+				case "toggle":
+					TxToggleUsed = !TxToggleUsed
+				}
+				log.Printf("%v Enabled is Now Set To %v\n", io.Name, TxToggleUsed)
+			}
+			if io.Name == "channelup" && io.Name == name {
+				switch command {
+				case "off":
+					UpButtonUsed = false
+				case "on":
+					UpButtonUsed = true
+				case "toggle":
+					UpButtonUsed = !UpButtonUsed
+				}
+				log.Printf("%v Enabled is Now Set To %v\n", io.Name, UpButtonUsed)
+			}
+			if io.Name == "channeldown" && io.Name == name {
+				switch command {
+				case "off":
+					DownButtonUsed = false
+				case "on":
+					DownButtonUsed = true
+				case "toggle":
+					DownButtonUsed = !DownButtonUsed
+				}
+				log.Printf("%v Enabled is Now Set To %v\n", io.Name, DownButtonUsed)
+			}
+			if io.Name == "panic" && io.Name == name {
+				switch command {
+				case "off":
+					PanicUsed = false
+				case "on":
+					PanicUsed = true
+				case "toggle":
+					PanicUsed = !PanicUsed
+				}
+				log.Printf("%v Enabled is Now Set To %v\n", io.Name, PanicUsed)
+			}
+			if io.Name == "streamtoggle" && io.Name == name {
+				switch command {
+				case "off":
+					StreamToggleUsed = false
+				case "on":
+					StreamToggleUsed = true
+				case "toggle":
+					StreamToggleUsed = !StreamToggleUsed
+				}
+				log.Printf("%v Enabled is Now Set To %v\n", io.Name, StreamToggleUsed)
+			}
+			if io.Name == "comment" && io.Name == name {
+				switch command {
+				case "off":
+					CommentUsed = false
+				case "on":
+					CommentUsed = true
+				case "toggle":
+					CommentUsed = !CommentUsed
+				}
+				log.Printf("%v Enabled is Now Set To %v\n", io.Name, CommentUsed)
+			}
+			if io.Name == "listening" && io.Name == name {
+				switch command {
+				case "off":
+					ListeningUsed = false
+				case "on":
+					ListeningUsed = true
+				case "toggle":
+					ListeningUsed = !ListeningUsed
+				}
+				log.Printf("%v Enabled is Now Set To %v\n", io.Name, ListeningUsed)
+			}
+			if io.Name == "rotarybutton" && io.Name == name {
+				switch command {
+				case "off":
+					RotaryButtonUsed = false
+				case "on":
+					RotaryButtonUsed = true
+				case "toggle":
+					RotaryButtonUsed = !RotaryButtonUsed
+				}
+				log.Printf("%v Enabled is Now Set To %v\n", io.Name, RotaryButtonUsed)
+			}
+			if io.Name == "volup" && io.Name == name {
+				switch command {
+				case "off":
+					VolUpButtonUsed = false
+				case "on":
+					VolUpButtonUsed = true
+				case "toggle":
+					VolUpButtonUsed = !VolUpButtonUsed
+				}
+				log.Printf("%v Enabled is Now Set To %v\n", io.Name, VolUpButtonUsed)
+			}
+			if io.Name == "voldown" && io.Name == name {
+				switch command {
+				case "off":
+					VolDownButtonUsed = false
+				case "on":
+					VolDownButtonUsed = true
+				case "toggle":
+					VolDownButtonUsed = !VolDownButtonUsed
+				}
+				log.Printf("%v Enabled is Now Set To %v\n", io.Name, VolDownButtonUsed)
+			}
+			if io.Name == "tracking" && io.Name == name {
+				switch command {
+				case "off":
+					TrackingUsed = false
+				case "on":
+					TrackingUsed = true
+				case "toggle":
+					TrackingUsed = !TrackingUsed
+				}
+				log.Printf("%v Enabled is Now Set To %v\n", io.Name, TrackingUsed)
+			}
+			if io.Name == "mqtt0" && io.Name == name {
+				switch command {
+				case "off":
+					MQTT0ButtonUsed = false
+				case "on":
+					MQTT0ButtonUsed = true
+				case "toggle":
+					MQTT0ButtonUsed = !MQTT0ButtonUsed
+				}
+				log.Printf("%v Enabled is Now Set To %v\n", io.Name, MQTT0ButtonUsed)
+			}
+			if io.Name == "mqtt1" && io.Name == name {
+				switch command {
+				case "off":
+					MQTT1ButtonUsed = false
+				case "on":
+					MQTT1ButtonUsed = true
+				case "toggle":
+					MQTT1ButtonUsed = !MQTT0ButtonUsed
+				}
+				log.Printf("%v Enabled is Now Set To %v\n", io.Name, MQTT1ButtonUsed)
+			}
+			if io.Name == "nextserver" && io.Name == name {
+				switch command {
+				case "off":
+					NextServerButtonUsed = false
+				case "on":
+					NextServerButtonUsed = true
+				case "toggle":
+					NextServerButtonUsed = !NextServerButtonUsed
+				}
+				log.Printf("%v Enabled is Now Set To %v\n", io.Name, NextServerButtonUsed)
+			}
+			if io.Name == "repeatertone" && io.Name == name {
+				switch command {
+				case "off":
+					RepeaterToneButtonUsed = false
+				case "on":
+					RepeaterToneButtonUsed = true
+				case "toggle":
+					RepeaterToneButtonUsed = !RepeaterToneButtonUsed
+				}
+				log.Printf("%v Enabled is Now Set To %v\n", io.Name, RepeaterToneButtonUsed)
+			}
+			if io.Name == "memorychannel1" && io.Name == name {
+				switch command {
+				case "off":
+					MemoryChannelButton1Used = false
+				case "on":
+					MemoryChannelButton1Used = true
+				case "toggle":
+					MemoryChannelButton1Used = !MemoryChannelButton1Used
+				}
+				log.Printf("%v Enabled is Now Set To %v\n", io.Name, MemoryChannelButton1Used)
+			}
+			if io.Name == "memorychannel2" && io.Name == name {
+				switch command {
+				case "off":
+					MemoryChannelButton2Used = false
+				case "on":
+					MemoryChannelButton2Used = true
+				case "toggle":
+					MemoryChannelButton2Used = !MemoryChannelButton2Used
+				}
+				log.Printf("%v Enabled is Now Set To %v\n", io.Name, MemoryChannelButton2Used)
+			}
+			if io.Name == "memorychannel3" && io.Name == name {
+				switch command {
+				case "off":
+					MemoryChannelButton3Used = false
+				case "on":
+					MemoryChannelButton3Used = true
+				case "toggle":
+					MemoryChannelButton3Used = !MemoryChannelButton3Used
+				}
+				log.Printf("%v Enabled is Now Set To %v\n", io.Name, MemoryChannelButton3Used)
+			}
+			if io.Name == "memorychannel4" && io.Name == name {
+				switch command {
+				case "off":
+					MemoryChannelButton4Used = false
+				case "on":
+					MemoryChannelButton4Used = true
+				case "toggle":
+					MemoryChannelButton4Used = !MemoryChannelButton4Used
+				}
+			}
+			if io.Name == "presetvoicetarget2" && io.Name == name {
+				switch command {
+				case "off":
+					VoiceTargetButton2Used = false
+				case "on":
+					VoiceTargetButton2Used = true
+				case "toggle":
+					VoiceTargetButton2Used = !VoiceTargetButton2Used
+				}
+			}
+			if io.Name == "presetvoicetarget3" && io.Name == name {
+				switch command {
+				case "off":
+					VoiceTargetButton3Used = false
+				case "on":
+					VoiceTargetButton3Used = true
+				case "toggle":
+					VoiceTargetButton3Used = !VoiceTargetButton3Used
+				}
+			}
+			if io.Name == "presetvoicetarget4" && io.Name == name {
+				switch command {
+				case "off":
+					VoiceTargetButton4Used = false
+				case "on":
+					VoiceTargetButton4Used = true
+				case "toggle":
+					VoiceTargetButton4Used = !VoiceTargetButton4Used
+				}
+			}
+			if io.Name == "presetvoicetarget5" && io.Name == name {
+				switch command {
+				case "off":
+					VoiceTargetButton5Used = false
+				case "on":
+					VoiceTargetButton5Used = true
+				case "toggle":
+					VoiceTargetButton5Used = !VoiceTargetButton5Used
+				}
+			}
+		}
+	}
+}
+
+func analogZone(announcementChannel string, IOName string) {
+	go func() {
+		var lastChannel string = ""
+		for {
+			select {
+			case f := <-Talking:
+				if (f.OnChannel == announcementChannel) && (lastChannel != announcementChannel) {
+					go GPIOOutPin(IOName, "on")
+					lastChannel = f.OnChannel
+				}
+			case <-TalkedTicker.C:
+				if lastChannel == announcementChannel {
+					go GPIOOutPin(IOName, "off")
+					lastChannel = ""
+				}
+			}
+		}
+	}()
+}
+
+func analogCreateZones() {
+	if Config.Global.Hardware.TargetBoard != "rpi" {
+		return
+	}
+
+	if !Config.Global.Hardware.AnalogRelays.Enabled {
+		log.Printf("debug: Skipping the Creation of Analog Zones\n")
+		return
+	}
+
+	for i, io := range Config.Global.Hardware.AnalogRelays.Zones.Zone {
+		if io.Enabled {
+			for _, ii := range Config.Global.Hardware.AnalogRelays.Zones.Zone[i].Pins.Name {
+				analogZone(io.ListenChannel, ii)
+				log.Printf("debug: Creating Analog Zones For Zone %v Relays %v\n", io.Name, ii)
+			}
+		}
+	}
 }

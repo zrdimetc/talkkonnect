@@ -35,6 +35,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -46,6 +47,7 @@ import (
 	"github.com/allan-simon/go-singleinstance"
 	"github.com/talkkonnect/colog"
 	hd44780 "github.com/talkkonnect/go-hd44780"
+	"github.com/talkkonnect/gosshd"
 	"github.com/talkkonnect/gumble/gumble"
 	"github.com/talkkonnect/gumble/gumbleffmpeg"
 	"github.com/talkkonnect/gumble/gumbleutil"
@@ -55,11 +57,8 @@ import (
 )
 
 var (
-	prevChannelID        uint32
-	prevParticipantCount int = 0
-	maxchannelid         uint32
-	tmessage             string
-	isrepeattx           bool = true
+	tmessage   string
+	isrepeattx bool = true
 )
 
 type Talkkonnect struct {
@@ -80,12 +79,11 @@ type Talkkonnect struct {
 }
 
 type ChannelsListStruct struct {
-	chanIndex            int
-	chanID               int
-	chanName             string
-	chanParent           *gumble.Channel
-	chanUsers            gumble.Users
-	chanenterPermissions bool
+	chanIndex  int
+	chanID     int
+	chanName   string
+	chanParent *gumble.Channel
+	chanUsers  gumble.Users
 }
 
 func Init(file string, ServerIndex string) {
@@ -111,7 +109,7 @@ func Init(file string, ServerIndex string) {
 			log.Println("error: Another Instance of talkkonnect is already running!!, Killing this Instance")
 			time.Sleep(5 * time.Second)
 			TTSEvent("quittalkkonnect")
-			CleanUp()
+			CleanUp(false)
 		}
 		defer lockFile.Close()
 	}
@@ -243,7 +241,7 @@ func Init(file string, ServerIndex string) {
 	exitStatus := 0
 
 	<-sigs
-	CleanUp()
+	CleanUp(false)
 	os.Exit(exitStatus)
 }
 
@@ -256,6 +254,15 @@ func (b *Talkkonnect) ClientStart() {
 
 	if Config.Global.Hardware.TargetBoard == "rpi" {
 		GPIOOutAll("led/relay", "off")
+		if Config.Global.Hardware.GPIOOffset > 0 {
+			for item, pins := range Config.Global.Hardware.IO.Pins.Pin {
+				if pins.Enabled {
+					newPinNo := Config.Global.Hardware.GPIOOffset + pins.PinNo
+					log.Printf("info: Offsetting GPIO PinNo=%v -> %v Name=%v\n", pins.PinNo, newPinNo, pins.Name)
+					Config.Global.Hardware.IO.Pins.Pin[item].PinNo = newPinNo
+				}
+			}
+		}
 	}
 
 	if Config.Global.Software.Settings.Logging == "screenandfile" {
@@ -280,17 +287,17 @@ func (b *Talkkonnect) ClientStart() {
 	if Config.Global.Hardware.TargetBoard == "rpi" {
 		log.Println("info: Target Board Set as RPI (gpio enabled) ")
 		b.initGPIO()
-		if Config.Global.Hardware.LedStripEnabled {
-			MyLedStrip, _ = NewLedStrip()
-			log.Printf("info: Led Strip %v %s\n", MyLedStrip.buf, MyLedStrip.display)
-		}
+		// if Config.Global.Hardware.LedStripEnabled {
+		// 	MyLedStrip, _ = NewLedStrip()
+		// 	log.Printf("info: Led Strip %v %s\n", MyLedStrip.buf, MyLedStrip.display)
+		// }
 	} else {
-		log.Println("info: Target Board Set as PC (gpio disabled) ")
+		log.Println("debug: Target Board Set as PC (gpio disabled) ")
 	}
 
 	if (Config.Global.Hardware.TargetBoard == "rpi" && Config.Global.Hardware.LCD.BacklightTimerEnabled) && (OLEDEnabled || Config.Global.Hardware.LCD.Enabled) {
 
-		log.Println("info: Backlight Timer Enabled by Config")
+		log.Println("debug: Backlight Timer Enabled by Config")
 		BackLightTime = *BackLightTimePtr
 		BackLightTime = time.NewTicker(time.Duration(Config.Global.Hardware.LCD.BackLightTimeoutSecs) * time.Second)
 
@@ -332,9 +339,35 @@ func (b *Talkkonnect) ClientStart() {
 
 	TTSEvent("talkkonnectloaded")
 
-	b.Connect()
-
+	//New Mumble Connection Routine
 	pstream = gumbleffmpeg.New(b.Client, gumbleffmpeg.SourceFile(""), 0)
+	IsConnected = false
+	IsPlayStream = false
+	NowStreaming = false
+	KillHeartBeat = false
+
+	var connectionTries int
+	for connectionTries = 1; connectionTries < 4; connectionTries++ {
+		_, err := gumble.Ping(b.Address, time.Second*1, time.Second*5)
+		if err != nil {
+			log.Printf("info: Ping Server Error %v try %v", err, connectionTries)
+			continue
+		}
+		_, err = gumble.DialWithDialer(new(net.Dialer), b.Address, b.Config, &b.TLSConfig)
+		if err != nil {
+			log.Printf("error: Dial Server Failed on try %v with message %v\n", connectionTries, err)
+			continue
+		}
+
+		log.Printf("info: Connected to Server Successfully\n")
+		b.OpenStream()
+		IsConnected = true
+		break
+	}
+
+	if connectionTries == 4 {
+		FatalCleanUp("Exceed Connection Threshold Reached! Giving Up trying to reach " + b.Address + "\n")
+	}
 
 	if (Config.Global.Hardware.HeartBeat.Enabled) && (Config.Global.Hardware.TargetBoard == "rpi") {
 		HeartBeat := time.NewTicker(time.Duration(Config.Global.Hardware.HeartBeat.Periodmsecs) * time.Millisecond)
@@ -360,16 +393,7 @@ func (b *Talkkonnect) ClientStart() {
 	}
 
 	if Config.Global.Software.Beacon.Enabled {
-		BeaconTicker := time.NewTicker(time.Duration(Config.Global.Software.Beacon.BeaconTimerSecs) * time.Second)
-
-		go func() {
-			for range BeaconTicker.C {
-				IsPlayStream = true
-				b.playIntoStream(Config.Global.Software.Beacon.BeaconFileAndPath, Config.Global.Software.Beacon.Volume)
-				IsPlayStream = false
-				log.Println("info: Beacon Enabled and Timed Out Auto Played File ", Config.Global.Software.Beacon.BeaconFileAndPath, " Into Stream")
-			}
-		}()
+		b.beaconPlay()
 	}
 
 	b.BackLightTimer()
@@ -399,7 +423,7 @@ func (b *Talkkonnect) ClientStart() {
 							LcdDisplay(LcdText, LCDRSPin, LCDEPin, LCDD4Pin, LCDD5Pin, LCDD6Pin, LCDD7Pin, LCDInterfaceType, LCDI2CAddress)
 						}
 						if OLEDEnabled {
-							oledDisplay(false, 6, 1, "Traffic Recording") // 6
+							oledDisplay(false, 6, OLEDStartColumn, "Traffic Recording") // 6
 						}
 					}
 				}
@@ -412,7 +436,7 @@ func (b *Talkkonnect) ClientStart() {
 							LcdDisplay(LcdText, LCDRSPin, LCDEPin, LCDD4Pin, LCDD5Pin, LCDD6Pin, LCDD7Pin, LCDInterfaceType, LCDI2CAddress)
 						}
 						if OLEDEnabled {
-							oledDisplay(false, 6, 1, "Mic Recording") // 6
+							oledDisplay(false, 6, OLEDStartColumn, "Mic Recording") // 6
 						}
 					}
 				}
@@ -425,7 +449,7 @@ func (b *Talkkonnect) ClientStart() {
 							LcdDisplay(LcdText, LCDRSPin, LCDEPin, LCDD4Pin, LCDD5Pin, LCDD6Pin, LCDD7Pin, LCDInterfaceType, LCDI2CAddress)
 						}
 						if OLEDEnabled {
-							oledDisplay(false, 6, 1, "Combo Recording") //6
+							oledDisplay(false, 6, OLEDStartColumn, "Combo Recording") //6
 						}
 					}
 				}
@@ -455,14 +479,17 @@ func (b *Talkkonnect) ClientStart() {
 				if LastSpeaker != v.WhoTalking {
 					LastSpeaker = v.WhoTalking
 				}
-
 				if !RXLEDStatus {
-					log.Println("info: Speaking->", v.WhoTalking)
+					if b.Client.Self.Channel.Name == v.OnChannel {
+						log.Printf("info: Speaking -> %v\n", v.WhoTalking)
+					} else {
+						log.Printf("info: Listening-> %v \033[31m[%v]\033[0m\n", v.WhoTalking, v.OnChannel)
+					}
 					RXLEDStatus = true
 					txlockout := &TXLockOut
 					*txlockout = true
 					go GPIOOutPin("voiceactivity", "on")
-					MyLedStripVoiceActivityLEDOn()
+					//					MyLedStripVoiceActivityLEDOn()
 					go rxScreen(LastSpeaker)
 				}
 			case <-TalkedTicker.C:
@@ -471,7 +498,7 @@ func (b *Talkkonnect) ClientStart() {
 					txlockout := &TXLockOut
 					*txlockout = false
 					go GPIOOutPin("voiceactivity", "off")
-					MyLedStripVoiceActivityLEDOff()
+					//MyLedStripVoiceActivityLEDOff()
 					//TalkedTicker.Stop()
 				}
 			}
@@ -539,6 +566,17 @@ func (b *Talkkonnect) ClientStart() {
 	Config.Accounts.Account[AccountIndex].Voicetargets.ID[0].IsCurrent = true
 	b.sevenSegment("mumblechannel", strconv.Itoa(int(b.Client.Self.Channel.ID)))
 
+	//Channel Listening on Startup
+	if Config.Global.Software.Settings.ListenToChannelsOnStart {
+		b.listeningToChannels("start")
+	}
+
+	analogCreateZones()
+
+	if Config.Global.Software.RemoteSSHConsole.Enabled {
+		go gosshd.SSHDaemon(Config.Global.Software.RemoteSSHConsole.Username, Config.Global.Software.RemoteSSHConsole.Password, Config.Global.Software.RemoteSSHConsole.IDRSAFile, Config.Global.Software.RemoteSSHConsole.Listen)
+	}
+
 keyPressListenerLoop:
 	for {
 		if IsConnected {
@@ -558,11 +596,11 @@ keyPressListenerLoop:
 				case term.KeyF3:
 					b.cmdMuteUnmute("toggle")
 				case term.KeyF4:
-					b.cmdCurrentVolume()
+					b.cmdCurrentRXVolume()
 				case term.KeyF5:
-					b.cmdVolumeUp()
+					b.cmdVolumeRXUp()
 				case term.KeyF6:
-					b.cmdVolumeDown()
+					b.cmdVolumeRXDown()
 				case term.KeyF7:
 					b.cmdListServerChannels()
 				case term.KeyF8:
@@ -604,6 +642,7 @@ keyPressListenerLoop:
 					b.cmdPingServers()
 				case term.KeyCtrlP:
 					b.cmdPanicSimulation()
+				case term.KeyCtrlQ:
 				case term.KeyCtrlG:
 					b.cmdPlayRepeaterTone()
 				case term.KeyCtrlR:
@@ -616,11 +655,18 @@ keyPressListenerLoop:
 					b.cmdShowUptime()
 				case term.KeyCtrlV:
 					b.cmdDisplayVersion()
+				case term.KeyCtrlW:
+					if !IsPlaying {
+						player.Play(0)
+						IsPlaying = true
+					} else {
+						player.Stop()
+						IsPlaying = false
+					}
 				case term.KeyCtrlX:
 					b.cmdDumpXMLConfig()
 				case term.KeyCtrlZ:
-					b.nextEnabledRotaryEncoderFunction()
-					//b.cmdConnNextServer()
+					b.cmdConnNextServer()
 				default:
 					if _, ok := TTYKeyMap[ev.Ch]; ok {
 						switch strings.ToLower(TTYKeyMap[ev.Ch].Command) {
@@ -640,10 +686,16 @@ keyPressListenerLoop:
 							b.cmdMuteUnmute("toggle")
 						case "stream-toggle":
 							b.cmdPlayback()
-						case "volumeup":
-							b.cmdVolumeUp()
-						case "volumedown":
-							b.cmdVolumeDown()
+						case "volumerxup":
+							b.cmdVolumeRXUp()
+						case "volumerxdown":
+							b.cmdVolumeRXDown()
+						case "volumetxdown":
+							b.cmdVolumeTXDown()
+						case "volumetxup":
+							b.cmdVolumeTXUp()
+						case "volumetxvolume":
+							b.cmdCurrentTXVolume()
 						case "setcomment":
 							if TTYKeyMap[ev.Ch].ParamValue == "setcomment" {
 								log.Println("info: Set Commment ", TTYKeyMap[ev.Ch].ParamValue)
@@ -662,6 +714,14 @@ keyPressListenerLoop:
 								log.Printf("error: Error Message %v, %v Is Not A Number", err, Paramvalue)
 							}
 							b.cmdSendVoiceTargets(uint32(Paramvalue))
+						case "listentochannelon":
+							b.listeningToChannels("start")
+						case "listentochanneloff":
+							b.listeningToChannels("stop")
+						case "gpioinput":
+							GPIOInputPinControl(TTYKeyMap[ev.Ch].ParamName, TTYKeyMap[ev.Ch].ParamValue)
+						case "gpiooutput":
+							GPIOOutputPinControl(TTYKeyMap[ev.Ch].ParamName, TTYKeyMap[ev.Ch].ParamValue)
 						default:
 							log.Println("error: Command Not Defined ", strings.ToLower(TTYKeyMap[ev.Ch].Command))
 						}

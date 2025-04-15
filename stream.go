@@ -32,7 +32,6 @@ package talkkonnect
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"log"
 	"strconv"
 	"time"
@@ -125,13 +124,13 @@ func (b *Talkkonnect) StopSource() error {
 	var eventSound EventSoundStruct = findEventSound("rogerbeep")
 	if eventSound.Enabled {
 		GPIOOutPin("transmit", "on")
-		MyLedStripTransmitLEDOn()
+		//MyLedStripTransmitLEDOn()
 		log.Println("debug: Rogerbeep Playing")
 		if v, err := strconv.ParseFloat(eventSound.Volume, 32); err == nil {
 			b.splayIntoStream(eventSound.FileName, float32(v))
 		}
 		GPIOOutPin("transmit", "off")
-		MyLedStripTransmitLEDOff()
+		//MyLedStripTransmitLEDOff()
 	}
 
 	b.Stream.deviceSource = openal.CaptureOpenDevice("", gumble.AudioSampleRate, openal.FormatMono16, uint32(b.Stream.sourceFrameSize))
@@ -142,7 +141,7 @@ func (b *Talkkonnect) StopSource() error {
 func (s *Stream) OnAudioStream(e *gumble.AudioStreamEvent) {
 	TotalStreams++
 	if _, userexists := StreamTracker[e.User.UserID]; userexists {
-		log.Printf("info: Stale GoRoutine Detected For UserID=%v UserName=%v Session=%v AudioStreamChannel=%v", e.User.UserID, e.User.Name, e.User.Session, e.C)
+		log.Printf("debug: Stale GoRoutine Detected For UserID=%v UserName=%v Session=%v AudioStreamChannel=%v", e.User.UserID, e.User.Name, e.User.Session, e.C)
 		NeedToKill++
 	}
 	StreamTracker[e.User.UserID] = streamTrackerStruct{UserID: e.User.UserID, UserName: e.User.Name, UserSession: e.User.Session, C: e.C}
@@ -176,8 +175,7 @@ func (s *Stream) OnAudioStream(e *gumble.AudioStreamEvent) {
 				IsPlayStream = !IsPlayStream
 				NowStreaming = IsPlayStream
 			}
-
-			Talking <- talkingStruct{true, e.User.Name}
+			Talking <- talkingStruct{true, e.User.Name, e.User.Channel.Name}
 			samples := len(packet.AudioBuffer)
 			if samples > cap(raw) {
 				continue
@@ -197,7 +195,7 @@ func (s *Stream) OnAudioStream(e *gumble.AudioStreamEvent) {
 			if source.State() != openal.Playing {
 				source.Play()
 			}
-			Talking <- talkingStruct{false, e.User.Name}
+			Talking <- talkingStruct{false, e.User.Name, e.User.Channel.Name}
 		}
 		reclaim()
 		emptyBufs.Delete()
@@ -244,10 +242,10 @@ func (b *Talkkonnect) sourceRoutine() {
 
 func (b *Talkkonnect) playIntoStream(filepath string, vol float32) {
 	if !IsPlayStream {
-		log.Println(fmt.Sprintf("info: File %s Stopped!", filepath))
+		log.Printf("info: File %s Stopped!", filepath)
 		pstream.Stop()
 		GPIOOutPin("transmit", "off")
-		MyLedStripTransmitLEDOff()
+		//MyLedStripTransmitLEDOff()
 		return
 	}
 
@@ -259,18 +257,18 @@ func (b *Talkkonnect) playIntoStream(filepath string, vol float32) {
 		}
 
 		GPIOOutPin("transmit", "on")
-		MyLedStripTransmitLEDOn()
+		//MyLedStripTransmitLEDOn()
 
 		IsPlayStream = true
 		pstream = gumbleffmpeg.New(b.Client, gumbleffmpeg.SourceFile(filepath), vol/100)
 		if err := pstream.Play(); err != nil {
-			log.Println(fmt.Sprintf("error: Can't play %s error %s", filepath, err))
+			log.Printf("error: Can't play %s error %s", filepath, err)
 		} else {
-			log.Println(fmt.Sprintf("info: File %s Playing!", filepath))
+			log.Printf("info: File %s Playing!", filepath)
 			pstream.Wait()
 			pstream.Stop()
 			GPIOOutPin("transmit", "off")
-			MyLedStripTransmitLEDOff()
+			//MyLedStripTransmitLEDOff()
 		}
 	} else {
 		log.Println("warn: Sound Disabled by Config")
@@ -280,9 +278,9 @@ func (b *Talkkonnect) playIntoStream(filepath string, vol float32) {
 func (b *Talkkonnect) splayIntoStream(filepath string, vol float32) {
 	pstream = gumbleffmpeg.New(b.Stream.client, gumbleffmpeg.SourceFile(filepath), vol/100)
 	if err := pstream.Play(); err != nil {
-		log.Println(fmt.Sprintf("error: Can't play %s error %s", filepath, err))
+		log.Printf("error: Can't play %s error %s", filepath, err)
 	} else {
-		log.Println(fmt.Sprintf("info: File %s Playing!", filepath))
+		log.Printf("info: File %s Playing!\n", filepath)
 		pstream.Wait()
 		pstream.Stop()
 	}
@@ -297,7 +295,7 @@ func (b *Talkkonnect) OpenStream() {
 				LcdDisplay(LcdText, LCDRSPin, LCDEPin, LCDD4Pin, LCDD5Pin, LCDD6Pin, LCDD7Pin, LCDInterfaceType, LCDI2CAddress)
 			}
 			if OLEDEnabled {
-				oledDisplay(false, 2, 1, "Stream Error!!")
+				oledDisplay(false, 2, OLEDStartColumn, "Stream Error!!")
 			}
 
 		}
@@ -314,9 +312,9 @@ func (b *Talkkonnect) ResetStream() {
 }
 
 func goStreamStats() {
-	log.Println("info: Active Streams")
+	log.Println("debug: Active Streams")
 	for item, value := range StreamTracker {
-		log.Printf("info: Item=%v UserID=%v UserName=%v Session=%v AudioStreamChannel=%v", item, value.UserID, value.UserName, value.UserSession, value.C)
+		log.Printf("debug: Item=%v UserID=%v UserName=%v Session=%v AudioStreamChannel=%v", item, value.UserID, value.UserName, value.UserSession, value.C)
 	}
-	log.Printf("Total GoRoutines Open=%v, Total GoRoutines Wasted=%v \n", TotalStreams, NeedToKill)
+	log.Printf("debug: Total GoRoutines Open=%v, Total GoRoutines Wasted=%v \n", TotalStreams, NeedToKill)
 }

@@ -48,7 +48,7 @@ func (b *Talkkonnect) cmdDisplayMenu() {
 
 	TTSEvent("displaymenu")
 	b.talkkonnectMenu("\x1b[0;44m") // add blue background to banner reference https://www.lihaoyi.com/post/BuildyourownCommandLinewithANSIescapecodes.html#background-colors
-	b.ParticipantLEDUpdate(true)
+	// b.ParticipantLEDUpdate(true)
 }
 
 func (b *Talkkonnect) cmdChannelUp() {
@@ -91,7 +91,7 @@ func (b *Talkkonnect) cmdMuteUnmute(subCommand string) {
 					LcdDisplay(LcdText, LCDRSPin, LCDEPin, LCDD4Pin, LCDD5Pin, LCDD6Pin, LCDD7Pin, LCDInterfaceType, LCDI2CAddress)
 				}
 				if OLEDEnabled {
-					oledDisplay(false, 6, 1, "Unmuted")
+					oledDisplay(false, 6, OLEDStartColumn, "Unmuted")
 				}
 			}
 			return
@@ -108,7 +108,7 @@ func (b *Talkkonnect) cmdMuteUnmute(subCommand string) {
 					LcdDisplay(LcdText, LCDRSPin, LCDEPin, LCDD4Pin, LCDD5Pin, LCDD6Pin, LCDD7Pin, LCDInterfaceType, LCDI2CAddress)
 				}
 				if OLEDEnabled {
-					oledDisplay(false, 6, 1, "Muted")
+					oledDisplay(false, 6, OLEDStartColumn, "Muted")
 				}
 			}
 			return
@@ -130,7 +130,7 @@ func (b *Talkkonnect) cmdMuteUnmute(subCommand string) {
 				LcdDisplay(LcdText, LCDRSPin, LCDEPin, LCDD4Pin, LCDD5Pin, LCDD6Pin, LCDD7Pin, LCDInterfaceType, LCDI2CAddress)
 
 				if OLEDEnabled {
-					oledDisplay(false, 6, 1, "Muted")
+					oledDisplay(false, 6, OLEDStartColumn, "Muted")
 				}
 			}
 			return
@@ -151,13 +151,13 @@ func (b *Talkkonnect) cmdMuteUnmute(subCommand string) {
 				LcdDisplay(LcdText, LCDRSPin, LCDEPin, LCDD4Pin, LCDD5Pin, LCDD6Pin, LCDD7Pin, LCDInterfaceType, LCDI2CAddress)
 			}
 			if OLEDEnabled {
-				oledDisplay(false, 6, 1, "Unmuted")
+				oledDisplay(false, 6, OLEDStartColumn, "Unmuted")
 			}
 		}
 		return
 	}
 }
-func (b *Talkkonnect) cmdCurrentVolume() {
+func (b *Talkkonnect) cmdCurrentRXVolume() {
 	OrigVolume, err := volume.GetVolume(Config.Global.Software.Settings.OutputVolControlDevice)
 	if err != nil {
 		log.Printf("error: Unable to get current volume: %+v\n", err)
@@ -166,20 +166,20 @@ func (b *Talkkonnect) cmdCurrentVolume() {
 	log.Printf("debug: F4 pressed Volume Level Requested\n")
 	log.Println("info: Volume Level is at", OrigVolume, "%")
 
-	TTSEvent("currentvolumelevel")
+	TTSEvent("currentrxvolumelevel")
 	if Config.Global.Hardware.TargetBoard == "rpi" {
 		if LCDEnabled {
 			LcdText = [4]string{"nil", "nil", "nil", "Volume " + strconv.Itoa(OrigVolume)}
 			LcdDisplay(LcdText, LCDRSPin, LCDEPin, LCDD4Pin, LCDD5Pin, LCDD6Pin, LCDD7Pin, LCDInterfaceType, LCDI2CAddress)
 		}
 		if OLEDEnabled {
-			oledDisplay(false, 6, 1, "Volume "+strconv.Itoa(OrigVolume))
+			oledDisplay(false, 6, OLEDStartColumn, "Volume "+strconv.Itoa(OrigVolume))
 		}
 		b.sevenSegment("localvolume", strconv.Itoa(OrigVolume))
 	}
 }
 
-func (b *Talkkonnect) cmdVolumeUp() {
+func (b *Talkkonnect) cmdVolumeRXUp() {
 	log.Printf("debug: F5 pressed Volume UP (+) \n")
 	origVolume, err := volume.GetVolume(Config.Global.Software.Settings.OutputVolControlDevice)
 	if err != nil {
@@ -200,7 +200,7 @@ func (b *Talkkonnect) cmdVolumeUp() {
 				LcdDisplay(LcdText, LCDRSPin, LCDEPin, LCDD4Pin, LCDD5Pin, LCDD6Pin, LCDD7Pin, LCDInterfaceType, LCDI2CAddress)
 			}
 			if OLEDEnabled {
-				oledDisplay(false, 6, 1, "Volume "+strconv.Itoa(origVolume))
+				oledDisplay(false, 6, OLEDStartColumn, "Volume "+strconv.Itoa(origVolume))
 			}
 			b.sevenSegment("localvolume", strconv.Itoa(origVolume))
 		}
@@ -213,7 +213,7 @@ func (b *Talkkonnect) cmdVolumeUp() {
 				LcdDisplay(LcdText, LCDRSPin, LCDEPin, LCDD4Pin, LCDD5Pin, LCDD6Pin, LCDD7Pin, LCDInterfaceType, LCDI2CAddress)
 			}
 			if OLEDEnabled {
-				oledDisplay(false, 6, 1, "Max Vol")
+				oledDisplay(false, 6, OLEDStartColumn, "Max Vol")
 			}
 			b.sevenSegment("localvolume", "100")
 		}
@@ -221,7 +221,7 @@ func (b *Talkkonnect) cmdVolumeUp() {
 	TTSEvent("digitalvolumeup")
 }
 
-func (b *Talkkonnect) cmdVolumeDown() {
+func (b *Talkkonnect) cmdVolumeRXDown() {
 	log.Printf("info: F6 pressed Volume Down (-) \n")
 	origVolume, err := volume.GetVolume(Config.Global.Software.Settings.OutputVolControlDevice)
 	if err != nil {
@@ -242,7 +242,7 @@ func (b *Talkkonnect) cmdVolumeDown() {
 				LcdDisplay(LcdText, LCDRSPin, LCDEPin, LCDD4Pin, LCDD5Pin, LCDD6Pin, LCDD7Pin, LCDInterfaceType, LCDI2CAddress)
 			}
 			if OLEDEnabled {
-				oledDisplay(false, 6, 1, "Volume "+strconv.Itoa(origVolume))
+				oledDisplay(false, 6, OLEDStartColumn, "Volume "+strconv.Itoa(origVolume))
 			}
 			b.sevenSegment("localvolume", strconv.Itoa(origVolume))
 		}
@@ -255,7 +255,113 @@ func (b *Talkkonnect) cmdVolumeDown() {
 				LcdDisplay(LcdText, LCDRSPin, LCDEPin, LCDD4Pin, LCDD5Pin, LCDD6Pin, LCDD7Pin, LCDInterfaceType, LCDI2CAddress)
 			}
 			if OLEDEnabled {
-				oledDisplay(false, 6, 1, "Min Vol")
+				oledDisplay(false, 6, OLEDStartColumn, "Min Vol")
+			}
+			b.sevenSegment("localvolume", "0")
+		}
+	}
+	TTSEvent("digitalvolumedown")
+}
+
+func (b *Talkkonnect) cmdCurrentTXVolume() {
+	OrigVolume, err := volume.GetVolume(Config.Global.Software.Settings.InputDevice)
+	if err != nil {
+		log.Printf("error: Unable to get current volume: %+v\n", err)
+	}
+
+	log.Printf("debug: TX Mic Volume Level Requested\n")
+	log.Println("info: Volume Level is at", OrigVolume, "%")
+
+	TTSEvent("currenttxvolumelevel")
+	if Config.Global.Hardware.TargetBoard == "rpi" {
+		if LCDEnabled {
+			LcdText = [4]string{"nil", "nil", "nil", "Volume " + strconv.Itoa(OrigVolume)}
+			LcdDisplay(LcdText, LCDRSPin, LCDEPin, LCDD4Pin, LCDD5Pin, LCDD6Pin, LCDD7Pin, LCDInterfaceType, LCDI2CAddress)
+		}
+		if OLEDEnabled {
+			oledDisplay(false, 6, OLEDStartColumn, "Volume "+strconv.Itoa(OrigVolume))
+		}
+		b.sevenSegment("localvolume", strconv.Itoa(OrigVolume))
+	}
+}
+
+func (b *Talkkonnect) cmdVolumeTXUp() {
+	log.Printf("debug: TX Mic Volume UP (+) \n")
+	origVolume, err := volume.GetVolume(Config.Global.Software.Settings.InputDevice)
+	if err != nil {
+		log.Printf("warn: unable to get original volume: %+v volume control will not work!\n", err)
+		return
+	}
+
+	if origVolume < 100 {
+		err := volume.IncreaseVolume(Config.Global.Hardware.IO.VolumeButtonStep.VolUpStep, Config.Global.Software.Settings.InputDevice)
+		if err != nil {
+			log.Println("warn: TX Mic Increase Volume Failed! ", err)
+		}
+		origVolume, _ := volume.GetVolume(Config.Global.Software.Settings.InputDevice)
+		log.Println("info: Volume UP (+) Now At ", origVolume, "%")
+		if Config.Global.Hardware.TargetBoard == "rpi" {
+			if LCDEnabled {
+				LcdText = [4]string{"nil", "nil", "nil", "Volume + " + strconv.Itoa(origVolume)}
+				LcdDisplay(LcdText, LCDRSPin, LCDEPin, LCDD4Pin, LCDD5Pin, LCDD6Pin, LCDD7Pin, LCDInterfaceType, LCDI2CAddress)
+			}
+			if OLEDEnabled {
+				oledDisplay(false, 6, OLEDStartColumn, "Volume "+strconv.Itoa(origVolume))
+			}
+			b.sevenSegment("localvolume", strconv.Itoa(origVolume))
+		}
+	} else {
+		log.Println("debug: TX Mic Increase Volume")
+		log.Println("info: Already at Maximum Possible Volume")
+		if Config.Global.Hardware.TargetBoard == "rpi" {
+			if LCDEnabled {
+				LcdText = [4]string{"nil", "nil", "nil", "Max Vol"}
+				LcdDisplay(LcdText, LCDRSPin, LCDEPin, LCDD4Pin, LCDD5Pin, LCDD6Pin, LCDD7Pin, LCDInterfaceType, LCDI2CAddress)
+			}
+			if OLEDEnabled {
+				oledDisplay(false, 6, OLEDStartColumn, "Max Vol")
+			}
+			b.sevenSegment("localvolume", "100")
+		}
+	}
+	TTSEvent("digitalvolumeup")
+}
+
+func (b *Talkkonnect) cmdVolumeTXDown() {
+	log.Printf("info: F6 pressed Volume Down (-) \n")
+	origVolume, err := volume.GetVolume(Config.Global.Software.Settings.InputDevice)
+	if err != nil {
+		log.Printf("warn: unable to get original volume: %+v volume control will not work!\n", err)
+		return
+	}
+
+	if origVolume > 0 {
+		err := volume.IncreaseVolume(Config.Global.Hardware.IO.VolumeButtonStep.VolDownStep, Config.Global.Software.Settings.InputDevice)
+		if err != nil {
+			log.Println("error: TX Mic Decrease Volume Failed! ", err)
+		}
+		origVolume, _ := volume.GetVolume(Config.Global.Software.Settings.InputDevice)
+		log.Println("info: Volume Down (-) Now At ", origVolume, "%")
+		if Config.Global.Hardware.TargetBoard == "rpi" {
+			if LCDEnabled {
+				LcdText = [4]string{"nil", "nil", "nil", "Volume - " + strconv.Itoa(origVolume)}
+				LcdDisplay(LcdText, LCDRSPin, LCDEPin, LCDD4Pin, LCDD5Pin, LCDD6Pin, LCDD7Pin, LCDInterfaceType, LCDI2CAddress)
+			}
+			if OLEDEnabled {
+				oledDisplay(false, 6, OLEDStartColumn, "Volume "+strconv.Itoa(origVolume))
+			}
+			b.sevenSegment("localvolume", strconv.Itoa(origVolume))
+		}
+	} else {
+		log.Println("debug: TX Mic Increase Volume Already")
+		log.Println("info: Already at Maximum Possible Volume")
+		if Config.Global.Hardware.TargetBoard == "rpi" {
+			if LCDEnabled {
+				LcdText = [4]string{"nil", "nil", "nil", "Min Vol"}
+				LcdDisplay(LcdText, LCDRSPin, LCDEPin, LCDD4Pin, LCDD5Pin, LCDD6Pin, LCDD7Pin, LCDInterfaceType, LCDI2CAddress)
+			}
+			if OLEDEnabled {
+				oledDisplay(false, 6, OLEDStartColumn, "Min Vol")
 			}
 			b.sevenSegment("localvolume", "0")
 		}
@@ -268,7 +374,7 @@ func (b *Talkkonnect) cmdListServerChannels() {
 
 	TTSEvent("listserverchannels")
 	//List Server Channels from ChannelsList[]
-	b.ParticipantLEDUpdate(true)
+	//	b.ParticipantLEDUpdate(true)
 }
 
 func (b *Talkkonnect) cmdStartTransmitting() {
@@ -329,9 +435,9 @@ func (b *Talkkonnect) cmdListOnlineUsers() {
 
 	TTSEvent("listonlineusers")
 
-	log.Println(fmt.Sprintf("info: Channel %#v Has %d Online User(s)", b.Client.Self.Channel.Name, len(b.Client.Self.Channel.Users)))
+	log.Printf("info: Channel %#v Has %d Online User(s)", b.Client.Self.Channel.Name, len(b.Client.Self.Channel.Users))
 	b.ListUsers()
-	b.ParticipantLEDUpdate(true)
+	// b.ParticipantLEDUpdate(true)
 }
 
 func (b *Talkkonnect) cmdPlayback() {
@@ -393,10 +499,10 @@ func (b *Talkkonnect) cmdGPSPosition() {
 					go hd44780.LcdDisplay(LcdText, LCDRSPin, LCDEPin, LCDD4Pin, LCDD5Pin, LCDD6Pin, LCDD7Pin, LCDInterfaceType, LCDI2CAddress)
 				}
 				if Config.Global.Hardware.OLED.Enabled {
-					oledDisplay(false, 4, 1, "GPS ERR1 "+time.Now().Format("15:04:05"))
-					oledDisplay(false, 5, 1, "GPS Device Error")
-					oledDisplay(false, 6, 1, "")
-					oledDisplay(false, 7, 1, "")
+					oledDisplay(false, 4, OLEDStartColumn, "GPS ERR1 "+time.Now().Format("15:04:05"))
+					oledDisplay(false, 5, OLEDStartColumn, "GPS Device Error")
+					oledDisplay(false, 6, OLEDStartColumn, "")
+					oledDisplay(false, 7, OLEDStartColumn, "")
 				}
 			}
 			break
@@ -429,10 +535,10 @@ func (b *Talkkonnect) cmdGPSPosition() {
 				go hd44780.LcdDisplay(LcdText, LCDRSPin, LCDEPin, LCDD4Pin, LCDD5Pin, LCDD6Pin, LCDD7Pin, LCDInterfaceType, LCDI2CAddress)
 			}
 			if Config.Global.Hardware.OLED.Enabled {
-				oledDisplay(false, 4, 1, "GPS ERR2 "+time.Now().Format("15:04:05"))
-				oledDisplay(false, 5, 1, "No Good GPS Reading")
-				oledDisplay(false, 6, 1, "")
-				oledDisplay(false, 7, 1, "")
+				oledDisplay(false, 4, OLEDStartColumn, "GPS ERR2 "+time.Now().Format("15:04:05"))
+				oledDisplay(false, 5, OLEDStartColumn, "No Good GPS Reading")
+				oledDisplay(false, 6, OLEDStartColumn, "")
+				oledDisplay(false, 7, OLEDStartColumn, "")
 			}
 		}
 	}
@@ -444,7 +550,7 @@ func (b *Talkkonnect) cmdQuitTalkkonnect() {
 	log.Printf("info: Talkkonnect Now Running For %v \n", secondsToHuman(int(duration.Seconds())))
 	b.sevenSegment("bye", "")
 	TTSEvent("quittalkkonnect")
-	CleanUp()
+	CleanUp(false)
 }
 
 func (b *Talkkonnect) cmdDebugStacktrace() {
@@ -577,7 +683,6 @@ func (b *Talkkonnect) cmdPingServers() {
 }
 
 func (b *Talkkonnect) cmdConnNextServer() {
-	log.Printf("debug: Ctrl-N Pressed \n")
 	log.Println("info: Next Server Requested Killing This Session, talkkonnect should be restarted by systemd")
 
 	TTSEvent("nextserver")
@@ -590,7 +695,6 @@ func (b *Talkkonnect) cmdConnNextServer() {
 		}
 		modifyXMLTagServerHopping(ConfigXMLFile, AccountIndex)
 	}
-
 }
 
 func (b *Talkkonnect) cmdAudioTrafficRecord() {
@@ -614,7 +718,7 @@ func (b *Talkkonnect) cmdAudioTrafficRecord() {
 							LcdDisplay(LcdText, LCDRSPin, LCDEPin, LCDD4Pin, LCDD5Pin, LCDD6Pin, LCDD7Pin, LCDInterfaceType, LCDI2CAddress)
 						}
 						if OLEDEnabled {
-							oledDisplay(false, 5, 1, "Traffic Audio Rec ->") // 6 or 5
+							oledDisplay(false, 5, OLEDStartColumn, "Traffic Audio Rec ->") // 6 or 5
 						}
 					}
 				} else {
@@ -646,7 +750,7 @@ func (b *Talkkonnect) cmdAudioMicRecord() {
 							LcdDisplay(LcdText, LCDRSPin, LCDEPin, LCDD4Pin, LCDD5Pin, LCDD6Pin, LCDD7Pin, LCDInterfaceType, LCDI2CAddress)
 						}
 						if OLEDEnabled {
-							oledDisplay(false, 5, 1, "Mic Audio Rec ->") // 6 or 5
+							oledDisplay(false, 5, OLEDStartColumn, "Mic Audio Rec ->") // 6 or 5
 						}
 					}
 				} else {
@@ -678,7 +782,7 @@ func (b *Talkkonnect) cmdAudioMicTrafficRecord() {
 							LcdDisplay(LcdText, LCDRSPin, LCDEPin, LCDD4Pin, LCDD5Pin, LCDD6Pin, LCDD7Pin, LCDInterfaceType, LCDI2CAddress)
 						}
 						if OLEDEnabled {
-							oledDisplay(false, 5, 1, "Combo Audio Rec ->") // 6 or 5
+							oledDisplay(false, 5, OLEDStartColumn, "Combo Audio Rec ->") // 6 or 5
 						}
 					}
 				} else {
@@ -749,7 +853,7 @@ func (b *Talkkonnect) cmdPanicSimulation() {
 					LcdDisplay(LcdText, LCDRSPin, LCDEPin, LCDD4Pin, LCDD5Pin, LCDD6Pin, LCDD7Pin, LCDInterfaceType, LCDI2CAddress)
 				}
 				if OLEDEnabled {
-					oledDisplay(false, 6, 1, "Panic Message Sent!")
+					oledDisplay(false, 6, OLEDStartColumn, "Panic Message Sent!")
 				}
 			}
 			if Config.Global.Hardware.PanicFunction.TxLockEnabled && Config.Global.Hardware.PanicFunction.TxLockTimeOutSecs > 0 {
@@ -841,14 +945,15 @@ func (b *Talkkonnect) cmdPlayRepeaterTone() {
 	log.Printf("debug: Ctrl-G Pressed \n")
 	log.Println("info: Play Repeater Tone on Speaker and Simulate RX Signal")
 
-	b.BackLightTimer()
-
-	if Config.Global.Software.Sounds.RepeaterTone.Enabled {
-		b.PlayTone(Config.Global.Software.Sounds.RepeaterTone.ToneFrequencyHz, Config.Global.Software.Sounds.RepeaterTone.ToneDurationSec, "local", true)
-	} else {
+	if !Config.Global.Software.Sounds.Repeatertone.Enabled {
 		log.Println("warn: Repeater Tone Disabled by Config")
+		return
 	}
 
+	b.BackLightTimer()
+
+	log.Printf("freq=%+v\n", Config.Global.Software.Sounds.Repeatertone.Sound.ToneFrequencyHz)
+	b.PlayTone(Config.Global.Software.Sounds.Repeatertone.Sound.ToneFrequencyHz, float32(Config.Global.Software.Sounds.Repeatertone.Sound.ToneDurationSec), Config.Global.Software.Sounds.Repeatertone.Sound.Direction, true)
 }
 
 func (b *Talkkonnect) cmdLiveReload() {

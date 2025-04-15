@@ -37,7 +37,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"math"
 	"net"
@@ -115,7 +114,7 @@ func secondsToHuman(input int) (result string) {
 func localAddresses() {
 	ifaces, err := net.Interfaces()
 	if err != nil {
-		log.Print(fmt.Sprintf("error: localAddresses %v", err.Error()))
+		log.Printf("error: localAddresses %v\n", err.Error())
 		return
 	}
 
@@ -123,7 +122,7 @@ func localAddresses() {
 		addrs, err := i.Addrs()
 
 		if err != nil {
-			log.Print(fmt.Sprintf("error: localAddresses %v", err.Error()))
+			log.Printf("error: localAddresses %v\n", err.Error())
 			continue
 		}
 
@@ -140,7 +139,7 @@ func (b *Talkkonnect) pingconnectedserver() {
 	resp, err := gumble.Ping(b.Address, time.Second*1, time.Second*5)
 
 	if err != nil {
-		log.Println(fmt.Sprintf("error: Ping Error %s", err))
+		log.Printf("error: Ping Error %s", err)
 		return
 	}
 
@@ -167,7 +166,7 @@ func sendviagmail(username string, password string, receiver string, subject str
 			go LcdDisplay(LcdText, LCDRSPin, LCDEPin, LCDD4Pin, LCDD5Pin, LCDD6Pin, LCDD7Pin, LCDInterfaceType, LCDI2CAddress)
 		}
 		if OLEDEnabled {
-			oledDisplay(false, 6, 1, "Sending Email")
+			oledDisplay(false, 6, OLEDStartColumn, "Sending Email")
 		}
 	}
 
@@ -443,7 +442,7 @@ func checkGitHubVersion() string {
 		_, _ = io.Copy(output, response.Body)
 	}
 
-	fileContent, err := ioutil.ReadFile(tmpfileName)
+	fileContent, err := os.ReadFile(tmpfileName)
 	if err != nil {
 		log.Println("error: Cannot Read Temporary File for Version Checking")
 		return talkkonnectVersion
@@ -467,7 +466,7 @@ func checkSBCVersion() string {
 		return "unknown"
 	}
 
-	fileContent, err := ioutil.ReadFile("/proc/device-tree/model")
+	fileContent, err := os.ReadFile("/proc/device-tree/model")
 	if err != nil {
 		log.Println("error: Cannot Check Raspberry Pi Board Version")
 		return "unknown"
@@ -494,12 +493,12 @@ func txScreen() {
 	if OLEDEnabled {
 		Oled.DisplayOn()
 		LCDIsDark = false
-		oledDisplay(false, 0, 1, "Online/TX")
-		oledDisplay(false, 3, 1, "TX at "+time.Now().Format("15:04:05"))
-		oledDisplay(false, 4, 1, "")
-		oledDisplay(false, 5, 1, "")
-		oledDisplay(false, 6, 1, "Please Visit       ")
-		oledDisplay(false, 7, 1, "www.talkkonnect.com")
+		oledDisplay(false, 0, OLEDStartColumn, "Online/TX")
+		oledDisplay(false, 3, OLEDStartColumn, "TX at "+time.Now().Format("15:04:05"))
+		oledDisplay(false, 4, OLEDStartColumn, "")
+		oledDisplay(false, 5, OLEDStartColumn, "")
+		oledDisplay(false, 6, OLEDStartColumn, "Please Visit")
+		oledDisplay(false, 7, OLEDStartColumn, "www.talkkonnect.com")
 	}
 }
 
@@ -512,12 +511,35 @@ func rxScreen(LastSpeaker string) {
 	}
 	if OLEDEnabled && Config.Global.Hardware.TargetBoard == "rpi" {
 		Oled.DisplayOn()
-		oledDisplay(false, 3, 1, LastSpeaker+" "+time.Now().Format("15:04:05"))
-		oledDisplay(false, 4, 1, "")
-		oledDisplay(false, 5, 1, "")
-		oledDisplay(false, 6, 1, "Please Visit       ")
-		oledDisplay(false, 7, 1, "www.talkkonnect.com")
+		oledDisplay(false, 0, OLEDStartColumn, "Online/RX")
+		oledDisplay(false, 3, OLEDStartColumn, LastSpeaker+" "+time.Now().Format("15:04:05"))
+		oledDisplay(false, 4, OLEDStartColumn, "")
+		oledDisplay(false, 5, OLEDStartColumn, "")
+		oledDisplay(false, 6, OLEDStartColumn, "Please Visit")
+		oledDisplay(false, 7, OLEDStartColumn, "www.talkkonnect.com")
 		BackLightTime.Reset(time.Duration(LCDBackLightTimeout) * time.Second)
+	}
+	if Config.Global.Software.Beacon.Enabled {
+		BeaconTime.Reset(time.Duration(time.Duration(Config.Global.Software.Beacon.BeaconTimerSecs) * time.Second))
+	}
+}
+
+func joinedLeftScreen(user string, info string) {
+	if LCDEnabled {
+		LcdText[0] = "Online/RX"
+		LcdText[2] = user
+		LcdText[3] = info
+		LcdDisplay(LcdText, LCDRSPin, LCDEPin, LCDD4Pin, LCDD5Pin, LCDD6Pin, LCDD7Pin, LCDInterfaceType, LCDI2CAddress)
+	}
+	if OLEDEnabled {
+		Oled.DisplayOn()
+		LCDIsDark = false
+		oledDisplay(false, 0, OLEDStartColumn, "Online/RX")
+		oledDisplay(false, 3, OLEDStartColumn, user)
+		oledDisplay(false, 4, OLEDStartColumn, info)
+		oledDisplay(false, 5, OLEDStartColumn, "")
+		oledDisplay(false, 6, OLEDStartColumn, "Please Visit       ")
+		oledDisplay(false, 7, OLEDStartColumn, "www.talkkonnect.com")
 	}
 }
 
@@ -559,4 +581,21 @@ func (b *Talkkonnect) VTMove(command string) {
 		}
 	}
 	b.cmdSendVoiceTargets(TargetID)
+}
+
+func stripRegex(in string) string {
+	reg, _ := regexp.Compile("[^a-zA-Z0-9-.:/_ ()]+")
+	return reg.ReplaceAllString(in, "")
+}
+
+func UniqueSliceElements[T comparable](inputSlice []T) []T {
+	uniqueSlice := make([]T, 0, len(inputSlice))
+	seen := make(map[T]bool, len(inputSlice))
+	for _, element := range inputSlice {
+		if !seen[element] {
+			uniqueSlice = append(uniqueSlice, element)
+			seen[element] = true
+		}
+	}
+	return uniqueSlice
 }

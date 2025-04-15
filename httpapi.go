@@ -41,7 +41,6 @@ import (
 )
 
 func (b *Talkkonnect) httpAPI(w http.ResponseWriter, r *http.Request) {
-
 	funcs := map[string]interface{}{
 		"displaymenu":        b.cmdDisplayMenu,
 		"channelup":          b.cmdChannelUp,
@@ -49,9 +48,12 @@ func (b *Talkkonnect) httpAPI(w http.ResponseWriter, r *http.Request) {
 		"mute-toggle":        b.cmdMuteUnmute,
 		"mute":               b.cmdMuteUnmute,
 		"unmute":             b.cmdMuteUnmute,
-		"currentvolume":      b.cmdCurrentVolume,
-		"volumeup":           b.cmdVolumeUp,
-		"volumedown":         b.cmdVolumeDown,
+		"currentrxvolume":    b.cmdCurrentRXVolume,
+		"volumerxup":         b.cmdVolumeRXUp,
+		"volumerxdown":       b.cmdVolumeRXDown,
+		"volumetxup":         b.cmdVolumeTXUp,
+		"volumetxdown":       b.cmdVolumeTXDown,
+		"currenttxvolume":    b.cmdCurrentTXVolume,
 		"listserverchannels": b.cmdListServerChannels,
 		"starttransmitting":  b.cmdStartTransmitting,
 		"stoptransmitting":   b.cmdStopTransmitting,
@@ -72,6 +74,8 @@ func (b *Talkkonnect) httpAPI(w http.ResponseWriter, r *http.Request) {
 		"dumpxmlconfig":      b.cmdDumpXMLConfig,
 		"ttsannouncement":    b.TTSPlayerAPI,
 		"voicetargetset":     b.cmdSendVoiceTargets,
+		"listeningstart":     b.cmdListeningStart,
+		"listeningstop":      b.cmdListeningStop,
 		"listapi":            listAPI}
 
 	APICommands, ok := r.URL.Query()["command"]

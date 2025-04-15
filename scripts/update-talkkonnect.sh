@@ -28,18 +28,15 @@
 ## Please RUN this Script as root user
 
 SERVICE="talkkonnect"
+BACKUPXML=talkkonnect-$(date +"%Y%m%d-%H%M%S").xml
+BACKUPCERT=mumble-$(date +"%Y%m%d-%H%M%S").pem
+
 if pgrep -x "$SERVICE" >/dev/null
 then
     echo "$SERVICE is running"
     systemctl stop talkkonnect
 else
     echo "$SERVICE stopped"
-fi
-
-if [[ -f "/root/talkkonnect.xml" ]]
-then
-	echo "removingroot/talkkonnect.xml"
-	rm /root/talkkonnect.xml
 fi
 
 if [[ -f "/home/talkkonnect/bin/talkkonnect" ]]
@@ -50,21 +47,44 @@ fi
 
 if [[ -f "/home/talkkonnect/gocode/src/github.com/talkkonnect/talkkonnect/talkkonnect.xml" ]]
 then
-	echo "copying talkkonnect.xml for safe keeping to /root/talkkonnect.xml"
-	cp /home/talkkonnect/gocode/src/github.com/talkkonnect/talkkonnect/talkkonnect.xml /root/
+	echo "copying talkkonnect.xml for safe keeping to /root/"$BACKUPXML
+	cp /home/talkkonnect/gocode/src/github.com/talkkonnect/talkkonnect/talkkonnect.xml /root/$BACKUPXML
+fi
+
+if [[ -f "/home/talkkonnect/gocode/src/github.com/talkkonnect/talkkonnect/mumble.pem" ]]
+then
+	echo "copying mumble.pem for safe keeping to /root/"$BACKUPXML
+	cp /home/talkkonnect/gocode/src/github.com/talkkonnect/talkkonnect/talkkonnect.xml /root/$BACKUPCERT
 fi
 
 rm -rf /home/talkkonnect/gocode/src/github.old
 rm -rf /home/talkkonnect/gocode/src/google.golang.org
 rm -rf /home/talkkonnect/gocode/src/golang.org
-cp -R /home/talkkonnect/gocode/src/github.com /home/talkkonnect/gocode/src/github.old
 rm -rf  /home/talkkonnect/gocode/src/github.com
 rm -rf  /home/talkkonnect/bin/talkkonnect
 
 
+## Check Latest of GOLANG 64 Bit Version for Raspberry Pi
+GOLANG_LATEST_STABLE_VERSION=$(curl -s https://go.dev/VERSION?m=text | grep go)
+cputype=`lscpu | grep Architecture | cut -d ":" -f 2 | sed 's/ //g'`
+bitsize=`getconf LONG_BIT`
+
+cd /usr/local
+
+if [ $bitsize == '32' ]
+then
+echo "32 bit processor"
+wget -nc https://go.dev/dl/$GOLANG_LATEST_STABLE_VERSION.linux-armv6l.tar.gz $GOLANG_LATEST_STABLE_VERSION.linux-armv6l.tar.gz
+tar -zxvf /usr/local/$GOLANG_LATEST_STABLE_VERSION.linux-armv6l.tar.gz
+else
+echo "64 bit processor"
+wget -nc https://go.dev/dl/$GOLANG_LATEST_STABLE_VERSION.linux-arm64.tar.gz $GOLANG_LATEST_STABLE_VERSION.linux-arm64.tar.gz
+tar -zxvf /usr/local/$GOLANG_LATEST_STABLE_VERSION.linux-arm64.tar.gz
+fi
+
+
 ## Create the necessary directoy structure under /home/talkkonnect/
 mkdir -p /home/talkkonnect/gocode
-#mkdir -p /home/talkkonnect/bin
 mkdir -p /home/talkkonnect/gocode/src
 mkdir -p /home/talkkonnect/gocode/src/github.com
 
@@ -73,25 +93,24 @@ mkdir -p /home/talkkonnect/gocode/src/github.com
 export PATH=$PATH:/usr/local/go/bin
 export GOPATH=/home/talkkonnect/gocode
 export GOBIN=/home/talkkonnect/bin
-export GO111MODULE="auto"
 
 ## Get the latest source code of talkkonnect from github.com
-echo "getting talkkonnect with go get"
-cd $GOPATH 
-go get -v github.com/talkkonnect/talkkonnect
-cp /root/mumble.pem /home/talkkonnect/gocode/src/github.com/talkkonnect/talkkonnect/
+echo "installing talkkonnect with go installing"
+cd $GOPATH
+mkdir -p /home/talkkonnect/gocode/src/github.com/talkkonnect
+cd /home/talkkonnect/gocode/src/github.com/talkkonnect
+git clone https://github.com/talkkonnect/talkkonnect
+cd /home/talkkonnect/gocode/src/github.com/talkkonnect/talkkonnect
+go mod init
+go mod tidy
 
 ## Build talkkonnect as binary
 cd $GOPATH/src/github.com/talkkonnect/talkkonnect
 go build -o /home/talkkonnect/bin/talkkonnect cmd/talkkonnect/main.go
 
-if [[ -f "/home/talkkonnect/gocode/src/github.old/talkkonnect/talkkonnect/talkkonnect.xml" ]]
-then
-	echo "copying original talkkonnect.xml back to /home/talkkonnect/gocode/src/github.com/talkkonnect/talkkonnect/talkkonnect.xml"
-	rm /home/talkkonnect/gocode/src/github.com/talkkonnect/talkkonnect/talkkonnect.xml
-	cp /home/talkkonnect/gocode/src/github.old/talkkonnect/talkkonnect/talkkonnect.xml  /home/talkkonnect/gocode/src/github.com/talkkonnect/talkkonnect/talkkonnect.xml
-fi
-
+echo copying $BACKUPXML
+cp /root/$BACKUPCERT /home/talkkonnect/gocode/src/github.com/talkkonnect/talkkonnect/mumble.pem
+cp /root/$BACKUPXML /home/talkkonnect/gocode/src/github.com/talkkonnect/talkkonnect/talkkonnect.xml
 
 if pgrep -x "$SERVICE" >/dev/null
 then
@@ -109,5 +128,3 @@ echo "copied old talkkonnect.xml file and replaced in /home/talkkonnect/gocode/s
 echo "Happy talkkonnecting!!"
 
 exit
-
-

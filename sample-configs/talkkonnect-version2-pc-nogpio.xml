@@ -2,9 +2,9 @@
 <document type="talkkonnect/xml">
   <accounts>
     <account name="talkkonnect-community" default="true">
-      <serverandport>mumble.talkkonnect.com:64738</serverandport>
+      <serverandport>mtechlink.talkkonnect.com:64738</serverandport>
       <username></username>
-      <password>talkkonnect</password>
+      <password></password>
       <insecure>true</insecure>
       <register>false</register>
       <certificate></certificate>
@@ -159,9 +159,6 @@
           <sound event="repeatertone" tonefrequencyhz="1750" volume="50" tonedurationsec="10" blocking="false" enabled="true"/>
         </repeatertone>
       </sounds>
-      <txtimeout enabled="false">
-        <txtimeoutsecs>60</txtimeoutsecs>
-      </txtimeout>
       <remotecontrol>
         <http listenport="8080" enabled="true">
                 <command action="displaymenu"        funcparamname=""        message="Display Menu"        enabled="true"/>
@@ -254,7 +251,6 @@
         <printtts>false</printtts>
         <printsmtp>false</printsmtp>
         <printsounds>false</printsounds>
-        <printtxtimeout>false</printtxtimeout>
         <printhttpapi>false</printhttpapi>
         <printtargetboard>false</printtargetboard>
         <printleds>false</printleds>

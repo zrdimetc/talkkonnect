@@ -37,6 +37,7 @@ import (
 	"log"
 	"os/exec"
 	"strconv"
+	"time"
 )
 
 func aplayLocal(fileNameWithPath string) {
@@ -93,9 +94,25 @@ func localMediaPlayer(fileNameWithPath string, playbackvolume int, blocking bool
 
 func (b *Talkkonnect) PlayTone(toneFreq int, toneDuration float32, destination string, withRXLED bool) {
 
-	if destination == "local" {
+	toneFilePath := "/home/talkkonnect/gocode/src/github.com/talkkonnect/talkkonnect/soundfiles/repeatertones/"
+	toneFileName := toneFilePath + "sine_" + strconv.Itoa(toneFreq) + "_" + strconv.FormatFloat(float64(toneDuration), 'f', -1, 64) + ".wav"
 
-		cmdArguments := []string{"-f", "lavfi", "-i", "sine=frequency=" + strconv.Itoa(toneFreq) + ":duration=" + fmt.Sprintf("%f", toneDuration), "-autoexit", "-nodisp"}
+	if !FileExists(toneFileName) {
+		cmdArguments := []string{"-f", "lavfi", "-i", "sine=frequency=" + strconv.Itoa(toneFreq) + ":duration=" + fmt.Sprintf("%f", toneDuration), toneFileName}
+
+		cmd := exec.Command("/usr/bin/ffmpeg", cmdArguments...)
+		err := cmd.Run()
+		if err != nil {
+			log.Println("error: ffmpeg error cannot generate tone file", err)
+			return
+		} else {
+			log.Printf("info: Generated Tone File %v Successfully\n", toneFileName)
+		}
+	}
+
+	if destination != "intostream" {
+
+		cmdArguments := []string{toneFileName, "-autoexit", "-nodisp"}
 		cmd := exec.Command("/usr/bin/ffplay", cmdArguments...)
 		var out bytes.Buffer
 		cmd.Stdout = &out
@@ -115,8 +132,16 @@ func (b *Talkkonnect) PlayTone(toneFreq int, toneDuration float32, destination s
 			GPIOOutPin("voiceactivity", "off")
 		}
 
-		log.Printf("info: Played Tone at Frequency %v Hz With Duration of %v Seconds\n", toneFreq, toneDuration)
+		log.Printf("info: Played Tone at Frequency %v Hz With Duration of %v Seconds Locally\n", toneFreq, toneDuration)
+	} else {
+		GPIOOutPin("transmit", "on")
+		//MyLedStripTransmitLEDOn()
+		log.Println("debug: Repeater Tone Playing")
+		b.splayIntoStream(toneFileName, 50)
+		GPIOOutPin("transmit", "off")
+		log.Printf("info: Played Tone at Frequency %v Hz With Duration of %v Seconds Into Stream\n", toneFreq, toneDuration)
 	}
+
 }
 
 /*
@@ -187,4 +212,34 @@ func playIOMedia(inputEvent string) {
 			go aplayLocal(inputEventSoundFile.File)
 		}
 	}
+}
+
+func (b *Talkkonnect) beaconPlay() {
+	BeaconTime = *BeaconTimePtr
+	if !Config.Global.Software.Beacon.Enabled {
+		BeaconTime.Stop()
+		return
+	}
+
+	go func() {
+		BeaconTime = time.NewTicker(time.Duration(Config.Global.Software.Beacon.BeaconTimerSecs) * time.Second)
+		for range BeaconTime.C {
+			if Config.Global.Software.Beacon.Playintostream {
+				IsPlayStream = true
+				b.playIntoStream(Config.Global.Software.Beacon.BeaconFileAndPath, Config.Global.Software.Beacon.BeaconVolumeIntoStream)
+				IsPlayStream = false
+				log.Println("info: Beacon Enabled and Timed Out Auto Played File ", Config.Global.Software.Beacon.BeaconFileAndPath, " Into Stream")
+			}
+			if Config.Global.Software.Beacon.LocalPlay {
+				if Config.Global.Software.Beacon.GPIOEnabled {
+					GPIOOutPin(Config.Global.Software.Beacon.GPIOName, "on")
+				}
+				log.Printf("info: Local/RF Beacon Playing %v with volume %v", Config.Global.Software.Beacon.BeaconFileAndPath, Config.Global.Software.Beacon.LocalVolume)
+				localMediaPlayer(Config.Global.Software.Beacon.BeaconFileAndPath, Config.Global.Software.Beacon.LocalVolume, true, 0, 1)
+				if Config.Global.Software.Beacon.GPIOEnabled {
+					GPIOOutPin(Config.Global.Software.Beacon.GPIOName, "off")
+				}
+			}
+		}
+	}()
 }

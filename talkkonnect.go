@@ -53,7 +53,10 @@ func talkkonnectBanner(backgroundcolor string) {
 	log.Println("info: " + backgroundcolor + "│Additional Modifications Released under MPL 2.0 License         │" + backgroundreset)
 	log.Println("info: " + backgroundcolor + "│Blog at www.talkkonnect.com, source at github.com/talkkonnect   │" + backgroundreset)
 	log.Println("info: " + backgroundcolor + "└────────────────────────────────────────────────────────────────┘" + backgroundreset)
-	releasedVersion := checkGitHubVersion()
+	releasedVersion := talkkonnectVersion
+	if IsConnected {
+		releasedVersion = checkGitHubVersion()
+	}
 	if talkkonnectVersion != releasedVersion {
 		log.Printf("warn: Software Ver %v Rel %v (Different Ver %v Available!)\n", talkkonnectVersion, talkkonnectReleased, releasedVersion)
 	} else {
@@ -112,11 +115,12 @@ func (b *Talkkonnect) talkkonnectMenu(backgroundcolor string) {
 	log.Println("info: " + backgroundcolor + "│<Ctrl-H> XML Config Checker  │<Ctrl-I> Traffic Record         │" + backgroundreset)
 	log.Println("info: " + backgroundcolor + "│<Ctrl-J> Mic Record          │<Ctrl-K> Traffic & Mic Record   │" + backgroundreset)
 	log.Println("info: " + backgroundcolor + "│<Ctrl-L> Clear Screen        │<Ctrl-M> Radio Channel (+)      │" + backgroundreset)
-	log.Println("info: " + backgroundcolor + "│<Ctrl-N> Next Server         │<Ctrl-O> Ping Servers           │" + backgroundreset)
-	log.Println("info: " + backgroundcolor + "│<Ctrl-P> Panic Simulation    │<Ctrl-R> Repeat TX Loop Test    │" + backgroundreset)
-	log.Println("info: " + backgroundcolor + "│<Ctrl-S> Scan Channels       │<Ctrl-T> Thanks/Acknowledgements│" + backgroundreset)
-	log.Println("info: " + backgroundcolor + "│<Ctrl-U> Show Uptime         │<Ctrl-V> Display Version        │" + backgroundreset)
-	log.Println("info: " + backgroundcolor + "│<Ctrl-X> Dump XML Config     │                                │" + backgroundreset)
+	log.Println("info: " + backgroundcolor + "│<Ctrl-N> Radio Channel (-)   │<Ctrl-O> Ping Servers           │" + backgroundreset)
+	log.Println("info: " + backgroundcolor + "│<Ctrl-P> Panic Simulation    │<Ctrl-Q>                        │" + backgroundreset)
+	log.Println("info: " + backgroundcolor + "│<Ctrl-R> Repeat TX Loop Test │<Ctrl-S> Scan Channels          │" + backgroundreset)
+	log.Println("info: " + backgroundcolor + "│<Ctrl-T> Thanks/Acknowledge  │<Ctrl-U> Show Uptime            │" + backgroundreset)
+	log.Println("info: " + backgroundcolor + "│<Ctrl-V> Display Version     │<Ctrl-W> Online Radio Start     │" + backgroundreset)
+	log.Println("info: " + backgroundcolor + "│<Ctrl-X> Dump XML Config     │<Ctrl-Z> Next Server            │" + backgroundreset)
 	log.Println("info: " + backgroundcolor + "├─────────────────────────────┼────────────────────────────────┤" + backgroundreset)
 	log.Println("info: " + backgroundcolor + "│  Visit us at www.talkkonnect.com and github.com/talkkonnect  │" + backgroundreset)
 	log.Println("info: " + backgroundcolor + "│  Thanks to Global Coders Co., Ltd. for their sponsorship     │" + backgroundreset)

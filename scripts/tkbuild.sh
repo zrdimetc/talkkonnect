@@ -30,14 +30,15 @@
 ## If this script is run after a fresh install of raspbian you man want to update the 2 lines below
 
 apt-get update
-apt-get -y dist upgrade
+apt-get -y dist-upgrade
+apt-get install git -y
 
 ## Add talkkonnect user to the system
 adduser --disabled-password --disabled-login --gecos "" talkkonnect
 usermod -a -G cdrom,audio,video,plugdev,users,dialout,dip,input,gpio talkkonnect
 
 ## Install the dependencies required for talkkonnect
-apt-get -y install libopenal-dev libopus-dev libasound2-dev git ffmpeg mplayer screen
+apt-get -y install libopenal-dev libopus-dev libasound2-dev git ffmpeg mplayer screen pkg-config
 
 ## Create the necessary directory structure under /home/talkkonnect/
 cd /home/talkkonnect/
@@ -47,9 +48,23 @@ mkdir -p /home/talkkonnect/bin
 ## Create the log file
 touch /var/log/talkkonnect.log
 
+# Check Latest of GOLANG 64 Bit Version for Raspberry Pi
+GOLANG_LATEST_STABLE_VERSION=$(curl -s https://go.dev/VERSION?m=text | grep go)
+cputype=`lscpu | grep Architecture | cut -d ":" -f 2 | sed 's/ //g'`
+bitsize=`getconf LONG_BIT`
+
 cd /usr/local
-wget https://golang.org/dl/go1.17.3.linux-armv6l.tar.gz
-tar -zxvf go1.17.3.linux-armv6l.tar.gz
+
+if [ $bitsize == '32' ]
+then
+echo "32 bit processor"
+wget -nc https://go.dev/dl/$GOLANG_LATEST_STABLE_VERSION.linux-armv6l.tar.gz $GOLANG_LATEST_STABLE_VERSION.linux-armv6l.tar.gz
+tar -zxvf /usr/local/$GOLANG_LATEST_STABLE_VERSION.linux-armv6l.tar.gz
+else
+echo "64 bit processor"
+wget -nc https://go.dev/dl/$GOLANG_LATEST_STABLE_VERSION.linux-arm64.tar.gz $GOLANG_LATEST_STABLE_VERSION.linux-arm64.tar.gz
+tar -zxvf /usr/local/$GOLANG_LATEST_STABLE_VERSION.linux-arm64.tar.gz
+fi
 
 echo export PATH=$PATH:/usr/local/go/bin >>  ~/.bashrc
 echo export GOPATH=/home/talkkonnect/gocode >>  ~/.bashrc
@@ -64,13 +79,19 @@ export GOPATH=/home/talkkonnect/gocode
 export GOBIN=/home/talkkonnect/bin
 export GO111MODULE="auto"
 
-## Get the latest source code of talkkonnect from githu.com
-go get -v github.com/talkkonnect/talkkonnect
+## Get the latest source code of talkkonnect from github.com
+echo "installing talkkonnect with traditional method avoiding go get cause its changed in golang 1.22 "
+cd $GOPATH
+mkdir -p /home/talkkonnect/gocode/src/github.com/talkkonnect
+cd /home/talkkonnect/gocode/src/github.com/talkkonnect
+git clone https://github.com/talkkonnect/talkkonnect
+cd /home/talkkonnect/gocode/src/github.com/talkkonnect/talkkonnect
+go mod init
+go mod tidy
 
 ## Build talkkonnect as binary
 cd $GOPATH/src/github.com/talkkonnect/talkkonnect
-mv $GOPATH/src/github.com/talkkonnect/talkkonnect $GOPATH/src/github.com/talkkonnect/talkkonnect
-/usr/local/go/bin/go build -o /home/talkkonnect/bin/talkkonnect cmd/talkkonnect/main.go
+go build -o /home/talkkonnect/bin/talkkonnect cmd/talkkonnect/main.go
 
 ## Notify User
 echo "=> Finished building TalKKonnect"
