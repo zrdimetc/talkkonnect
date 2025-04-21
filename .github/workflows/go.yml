@@ -22,9 +22,7 @@ jobs:
         go-version: '1.24.2'
 
     - name: Build
-      run: 
+      run: cd /home/talkkonnect/gocode/src/github.com/talkkonnect/talkkonnect && go build -o /home/talkkonnect/bin/talkkonnect cmd/talkkonnect/main.go
 
     - name: Run the scripts
-      run: |
-          /talkkonnect/talkkonnect/scripts/tkbuild.sh
-      
+      run:     
