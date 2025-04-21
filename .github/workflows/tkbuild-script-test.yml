@@ -23,4 +23,4 @@ jobs:
       uses: actions/checkout@v4
       
     - name: Build
-      run: /root/gist/05051b24e92fedc982621fd78f3fb602/tkbuild-v1.sh
+      run: /root/tkbuild-v1.sh
