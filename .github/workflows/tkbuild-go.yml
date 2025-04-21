@@ -23,4 +23,4 @@ jobs:
       uses: actions/checkout@v4
       
     - name: Build
-      run: cd /home/talkkonnect/gocode/src/github.com/talkkonnect/talkkonnect & go build -x -o /home/talkkonnect/bin/talkkonnect cmd/talkkonnect/main.go
+      run: go clean --cache & cd /home/talkkonnect/gocode/src/github.com/talkkonnect/talkkonnect & go build -x -o /home/talkkonnect/bin/talkkonnect cmd/talkkonnect/main.go
