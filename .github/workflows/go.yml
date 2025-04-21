@@ -15,7 +15,6 @@ jobs:
     runs-on: self-hosted
     steps:
     
-    - name: Checkout Go
     - uses: actions/checkout@v4
 
     - name: Set up Go
