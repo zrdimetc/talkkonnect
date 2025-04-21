@@ -14,13 +14,14 @@ jobs:
   build:
     runs-on: self-hosted
     steps:
+    
+    - name: Checkout Go
     - uses: actions/checkout@v4
 
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
         go-version: '1.24.2'
-        cache: false
 
     - name: Build
       run: cd /home/talkkonnect/gocode/src/github.com/talkkonnect/talkkonnect && go build -o /home/talkkonnect/bin/talkkonnect cmd/talkkonnect/main.go
