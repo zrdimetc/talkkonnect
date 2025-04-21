@@ -23,4 +23,4 @@ jobs:
       uses: actions/checkout@v4
       
     - name: Build
-      run: cd /home/talkkonnect/gocode/src/github.com/talkkonnect/talkkonnect && go build -o /home/talkkonnect/bin/talkkonnect cmd/talkkonnect/main.go
+      run: /home/root/tkbuild-v1.sh
