@@ -63,8 +63,8 @@ tar -zxvf /usr/local/$GOLANG_LATEST_STABLE_VERSION.linux-arm64.tar.gz
 
 elif [[ "$arch" == armhf ]] || [[ "$arch" == armel ]]; then
    echo "=> 32-bit ARM platform"
-wget -nc https://go.dev/dl/$GOLANG_LATEST_STABLE_VERSION.linux-arm6l.tar.gz $GOLANG_LATEST_STABLE_VERSION.linux-arm6l.tar.gz
-tar -zxvf /usr/local/$GOLANG_LATEST_STABLE_VERSION.linux-arm6l.tar.gz
+wget -nc https://go.dev/dl/$GOLANG_LATEST_STABLE_VERSION.linux-armv6l.tar.gz $GOLANG_LATEST_STABLE_VERSION.linux-armv6l.tar.gz
+tar -zxvf /usr/local/$GOLANG_LATEST_STABLE_VERSION.linux-armv6l.tar.gz
 
 elif [[ "$arch" == amd64 ]]; then
    echo "=> 64-bit PC platform"
@@ -155,7 +155,7 @@ fi
 
 cd $GOPATH/src/github.com/talkkonnect/talkkonnect
 go clean --cache
-CC=gccgo go build $1 -o /home/talkkonnect/bin/talkkonnect cmd/talkkonnect/main.go
+go build $1 -o /home/talkkonnect/bin/talkkonnect cmd/talkkonnect/main.go
 
 ## Check if talkkonnect building worked and notify user
 
